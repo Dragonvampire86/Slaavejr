@@ -1,0 +1,16 @@
+{
+  "name": "Slåvejr",
+  "short_name": "Slåvejr",
+  "description": "Hvornår er græsset tørt nok til at slå, hvor ofte skal det slås, og skal det vandes?",
+  "lang": "da",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#efede4",
+  "theme_color": "#efede4",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

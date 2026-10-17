@@ -1,23 +1,27 @@
 # Slåvejr
 
-Hvornår er græsset tørt nok til at slå? Siden henter timeprognosen for dit sted og beregner time for time, hvor meget vand der sidder på græsstråene fra regn og dug, hvornår det fordamper, og om der er frost eller blød jord.
+Hvornår er græsset tørt nok til at slå, hvor ofte skal det slås, og skal det vandes? Siden henter vejrudsigten for dit sted og regner time for time på vandet på græsstråene, vandet i jorden og hvor meget græsset vokser.
 
 Åbn siden: https://dragonvampire86.github.io/Slaavejr/
 
 ## Sådan virker den
 
-- Vejrdata fra [Open-Meteo](https://open-meteo.com/) (CC BY 4.0), de seneste to døgn og fire døgn frem.
+- Vejrdata fra [Open-Meteo](https://open-meteo.com/) (CC BY 4.0): de seneste 30 døgn og 7 døgn frem.
 - Dug og fordampning beregnes med Penman–Monteith-ligningen for en våd overflade (FAO-56).
 - En time regnes som tør, når der er under 0,02 mm vand på stråene, ingen regn, ingen frost og dagslys.
-- Viser sidste og næste regn (vejrmodellens tal for de seneste syv døgn og prognosen).
-- Anbefaler klippehøjde efter årstid, temperatur, tørke og skygge, med 1/3-reglen.
+- Viser sidste og næste regn.
+- Klippeplan: vækst ud fra temperatur, lys, jordvand, græstype og gødning. Efter 1/3-reglen foreslås næste klipning i et tørt vindue, når du har trykket "Jeg har slået græs i dag".
+- Vandingsråd ud fra jordbund (sand, muld, ler), regn og fordampning.
+- Anbefalet klippehøjde efter årstid, temperatur, tørke og skygge.
+- Kan installeres som app og viser den seneste prognose uden net.
+- Tegningen og farverne følger årstiden, i stil med gamle botaniske kobberstik.
 
 ## Privatliv og sikkerhed
 
 - Ingen konto, ingen cookies, ingen sporing og ingen nøgler i koden.
-- Dit valgte sted gemmes kun i din egen browser.
+- Dit valgte sted, dine indstillinger og dine klippedatoer gemmes kun i din egen browser.
 - Positionen afrundes til ca. 1 km, før den sendes til Open-Meteo.
 - Skrifttyperne ligger i repositoriet, så siden kontakter ikke Google.
 - En Content Security Policy tillader kun sidens egne filer og Open-Meteos to adresser.
 
-Skrifttyperne Familjen Grotesk og IBM Plex Mono er under SIL Open Font License 1.1 (se mappen `fonts`).
+Skrifttyperne IM Fell English og Source Serif 4 er under SIL Open Font License 1.1 (se mappen `fonts`).
