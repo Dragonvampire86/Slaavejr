@@ -2,7 +2,7 @@
 
 Hvornår er græsset tørt nok til at slå? Siden henter timeprognosen for dit sted og beregner time for time, hvor meget vand der sidder på græsstråene fra regn og dug, hvornår det fordamper, og om der er frost eller blød jord.
 
-Åbn siden: https://dragonvampire86.github.io/slaavejr/
+Åbn siden: https://dragonvampire86.github.io/Slaavejr/
 
 ## Sådan virker den
 
