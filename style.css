@@ -270,6 +270,19 @@ summary{cursor:pointer;font-family:var(--font-display);font-size:1.2rem}
 .b-dot{fill:var(--p-ink);opacity:.7}
 .b-stolon{fill:none;stroke:var(--c-leaf2);stroke-width:2.4}
 .b-num{font-family:var(--font-display);font-style:italic;font-size:4px;fill:var(--p-ink)}
+.c-wood{fill:#b9895a} .c-woodd{fill:#7d5530;opacity:.45} .c-steel{fill:#aeb7bd} .c-steeld{fill:#5f6b72;opacity:.4}
+.c-zinc{fill:#aab5b9} .c-zincd{fill:#6d7a80;opacity:.5} .c-rule{fill:#e6c76a} .c-brass{fill:#c79f45}
+.c-turf{fill:#6f8f45} .c-muld{fill:#6b5236} .c-loam{fill:#8c6b48} .c-sand{fill:#dcc48f} .c-clay{fill:#a5978b}
+.c-worm{fill:#cf948a} .c-stone{fill:#a39d92} .c-crumb{fill:#3e2f1f;opacity:.55} .c-shade{fill:#2b261b;opacity:.18}
+.b-spine{fill:none;stroke:var(--p-ink);stroke-width:1.1;stroke-linecap:round}
+.b-glintline{fill:none;stroke:#fff;stroke-width:.8;stroke-linecap:round;opacity:.85}
+.b-water{fill:none;stroke:#5f8fb8;stroke-width:.55;stroke-linecap:round;opacity:.9}
+.b-cut{fill:none;stroke:var(--p-ink);stroke-width:.7;stroke-dasharray:3 2.2}
+.b-rulenum{font-family:var(--font-text);font-size:5px;fill:var(--p-ink);text-anchor:middle}
+.b-numL{font-family:var(--font-display);font-style:italic;font-size:9px;fill:var(--p-ink)}
+.scythe{transform-box:fill-box;transform-origin:82% 94%}
+.growgrass{transform-box:fill-box;transform-origin:50% 100%}
+.clip,.worm{transform-box:fill-box;transform-origin:50% 50%}
 .figsvg .frame{fill:none;stroke:var(--p-rule)}
 .figsvg .tabno{font-family:var(--font-display);font-style:italic;font-size:10px;fill:var(--p-muted)}
 .plantbox,.vig{transform-box:fill-box;transform-origin:50% 100%}

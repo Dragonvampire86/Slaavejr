@@ -524,6 +524,299 @@ const Botany = (() => {
     }
   }
 
+
+  /* ------------------------------ motiver til felterne ------------------------------ */
+  // Rør eller håndtag langs en kurve: glat omrids med en given bredde.
+  function tube(pts, w) {
+    const Lf = [], Rt = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+      const dx = b[0] - a[0], dy = b[1] - a[1], m = Math.hypot(dx, dy) || 1;
+      const nx = -dy / m, ny = dx / m, ww = typeof w === 'function' ? w(i / (pts.length - 1)) : w;
+      Lf.push([pts[i][0] + nx * ww / 2, pts[i][1] + ny * ww / 2]); Rt.push([pts[i][0] - nx * ww / 2, pts[i][1] - ny * ww / 2]);
+    }
+    return { outline: smooth(Lf.concat(Rt.reverse()), true), left: Lf };
+  }
+  function tuft(L, x, y, H, n, spread, R, o = {}) {
+    const tips = [];
+    for (let i = 0; i < n; i++) {
+      const a = -spread + (n > 1 ? i * (2 * spread / (n - 1)) : 0) + (R() - 0.5) * 0.18;
+      const b = blade([x + (R() - 0.5) * H * 0.12, y], a, H * (0.55 + R() * 0.45), Math.max(2.2, H * 0.07), a * 0.9 + (R() - 0.5) * 0.5);
+      bladeInk(L, b, { cls: o.cls ? o.cls(R) : 'c-leaf' });
+      tips.push(b.tip);
+    }
+    return tips;
+  }
+  function weatherOnTips(L, tips, o, H) {
+    if (o.frost) { for (const [x, y] of tips) ink(L, `M${f(x - 2)},${f(y + 2.5)} L${f(x)},${f(y)} L${f(x + 2)},${f(y + 2.5)}`, 'b-rime'); return; }
+    if (o.wet > 0.05) tips.forEach(([x, y], i) => { if (i % 2 === 0) dewDrop(L, x, y + H * 0.035, H * (0.011 + 0.011 * o.wet), false); });
+  }
+  function rainLines(L, x0, y0, w, h, n, R) {
+    for (let i = 0; i < n; i++) { const x = x0 + R() * w, y = y0 + R() * h; ink(L, `M${f(x)},${f(y)} l-1.6,${f(5 + R() * 3)}`, 'b-fine'); }
+  }
+  function cloud(L, x, y, s) {
+    const bumps = [[-1.2, 0.1, 0.8], [-0.4, -0.5, 1], [0.6, -0.35, 0.9], [1.3, 0.15, 0.65]];
+    for (const [bx, by, br] of bumps) el('circle', { cx: f(x + bx * s), cy: f(y + by * s), r: f(br * s + 0.5), class: 'b-ink' }, L.ink);
+    for (const [bx, by, br] of bumps) el('circle', { cx: f(x + bx * s), cy: f(y + by * s), r: f(br * s), class: 'c-paper' }, L.ink);
+    el('rect', { x: f(x - 2 * s), y: f(y + 0.12 * s), width: f(4 * s), height: f(s), class: 'c-paper' }, L.ink);
+    ink(L, `M${f(x - 1.95 * s)},${f(y + 0.15 * s)} L${f(x + 1.95 * s)},${f(y + 0.15 * s)}`, 'b-ink');
+    for (let k = 0; k < 5; k++) ink(L, `M${f(x - 1.4 * s + k * 0.6 * s)},${f(y - 0.05 * s)} l${f(0.4 * s)},0`, 'b-hair');
+  }
+
+  // Slå nu: en le over græsset, med afslået græs i skår. Dug, rim eller regn efter vejret.
+  function scythe(g, o = {}) {
+    const R = rng(o.seed || 31), plate = o.detail === 'plate', H = o.height || 100;
+    const season = o.season || 'summer', back = layers(g);
+    const leafCls = season === 'winter' ? 'c-winter' : 'c-leaf';
+    // skår af afslået græs
+    for (let i = 0; i < (plate ? 12 : 8); i++) {
+      const x = -H * (0.25 + R() * 0.6), y = -R() * 2.5;
+      const b = blade([x, y], -1.5 + (R() - 0.5) * 0.35, H * (0.2 + R() * 0.14), Math.max(2, H * 0.045), (R() - 0.5) * 0.3);
+      bladeInk(back, b, { cls: R() < 0.5 ? 'c-straw' : leafCls, noHatch: true });
+    }
+    el('ellipse', { cx: f(-H * 0.2), cy: 1.5, rx: f(H * 0.55), ry: 2.5, class: 'c-soil' }, back.wash);
+    // leen (egen gruppe, så den kan svinge)
+    const S = el('g', { class: 'scythe' }, g), L = layers(S);
+    const sn = blade([H * 0.06, -H * 0.06], 0.42, H * 1.05, Math.max(2.6, H * 0.034), -0.5, 'stem', 22);
+    bladeInk(L, sn, { cls: 'c-wood', shade: 'c-woodd', noHatch: true });
+    for (const t of [0.42, 0.8]) {
+      const i = Math.round(t * 22), c = sn.C[i];
+      const grip = blade(c, 0.42 + 1.25 - t * 0.4, H * 0.12, Math.max(1.8, H * 0.024), -0.2, 'stem', 8);
+      bladeInk(L, grip, { cls: 'c-wood', shade: 'c-woodd', noHatch: true, noVein2: true });
+      el('circle', { cx: f(grip.tip[0]), cy: f(grip.tip[1]), r: f(H * 0.016), class: 'c-woodd' }, L.ink);
+      el('circle', { cx: f(grip.tip[0]), cy: f(grip.tip[1]), r: f(H * 0.016), class: 'b-fine' }, L.ink);
+      el('ellipse', { cx: f(c[0]), cy: f(c[1]), rx: f(H * 0.022), ry: f(H * 0.012), class: 'c-steel' }, L.ink);
+      el('ellipse', { cx: f(c[0]), cy: f(c[1]), rx: f(H * 0.022), ry: f(H * 0.012), class: 'b-fine' }, L.ink);
+    }
+    const h0 = sn.C[1], spine = [], edge = [];
+    for (let i = 0; i <= 24; i++) {
+      const t = i / 24;
+      const x = h0[0] - t * H * 0.98;
+      let y = h0[1] - Math.sin(Math.PI * Math.min(1, t * 1.02)) * H * 0.13 + t * H * 0.05;
+      if (t > 0.84) y -= (t - 0.84) * H * 0.35;
+      const w = H * (0.092 * Math.pow(1 - t, 0.7) + 0.004);
+      spine.push([x, y]); edge.push([x + w * 0.15, y + w]);
+    }
+    const bl = smooth(spine.concat(edge.slice().reverse()), true);
+    wash(L, bl, 'c-steel');
+    wash(L, smooth(spine.concat(spine.map((p, i) => [lerp(p[0], edge[i][0], 0.35), lerp(p[1], edge[i][1], 0.35)]).reverse()), true), 'c-steeld', 0.2, 0.2);
+    ink(L, bl, 'b-ink');
+    ink(L, smooth(spine), 'b-spine');
+    ink(L, smooth(spine.map((p, i) => [lerp(p[0], edge[i][0], 0.55), lerp(p[1], edge[i][1], 0.55)]).slice(1, 20)), 'b-glintline');
+    for (let i = 2; i < 20; i += 2) { const a = spine[i], b = edge[i]; ink(L, `M${f(a[0])},${f(a[1])} L${f(lerp(a[0], b[0], 0.3))},${f(lerp(a[1], b[1], 0.3))}`, 'b-hair'); }
+    el('ellipse', { cx: f(h0[0]), cy: f(h0[1]), rx: f(H * 0.03), ry: f(H * 0.02), class: 'c-steel' }, L.ink);
+    el('ellipse', { cx: f(h0[0]), cy: f(h0[1]), rx: f(H * 0.03), ry: f(H * 0.02), class: 'b-fine' }, L.ink);
+    // græs foran leen
+    const front = layers(g);
+    const tips = tuft(front, -H * 0.05, 0, H * 0.5, plate ? 13 : 9, 0.85, R, { cls: r => (season === 'autumn' && r() < 0.3 ? 'c-ochre' : leafCls) });
+    tips.push(...tuft(front, H * 0.32, 0, H * 0.32, 5, 0.6, R, { cls: () => leafCls }));
+    weatherOnTips(front, tips, o, H);
+    if (o.rain) rainLines(front, -H * 0.8, -H * 1.0, H * 1.2, H * 0.5, plate ? 40 : 24, R);
+    if (plate) {
+      const d = el('g', { transform: `translate(${f(H * 0.55)} ${f(-H * 0.9)}) scale(2.2)` }, g), DL = layers(d);
+      if (o.wet > 0.05 && !o.frost) {
+        const b = blade([-2, 8], 0.2, 14, 3.4, 0.25);
+        bladeInk(DL, b, { cls: leafCls, noHatch: true });
+        dewDrop(DL, b.tip[0] + 0.3, b.tip[1] + 2.2, 2.2, false);
+      } else {
+        const st = 'M-7,2 C-6,-1 6,-1 7,2 C6,4 -6,4 -7,2 Z';
+        wash(DL, st, 'c-stone'); ink(DL, st, 'b-fine');
+        for (let k = 0; k < 6; k++) ink(DL, `M${-5 + k * 2},0.6 l1,2`, 'b-hair');
+      }
+      el('text', { x: -10, y: 2, class: 'b-num' }, d).textContent = '1.';
+    }
+  }
+
+  // Klippeplan: græsarten med en tommestok, klippelinje og afklippede spidser.
+  function measure(g, o = {}) {
+    const R = rng((o.seed || 61) + 7), H = o.height || 100, plate = o.detail === 'plate';
+    const pg = el('g', { class: 'growgrass' }, g);
+    grass(pg, Object.assign({}, o, { detail: plate ? 'plate' : 'vignette', height: H * 0.92 }));
+    const L = layers(g);
+    // tommestok
+    const rx = H * 0.5, rw = Math.max(4, H * 0.06), seg = H * 0.2, nseg = 5;
+    for (let k = 0; k < nseg; k++) {
+      const y1 = -k * seg, y0 = y1 - seg;
+      const d = `M${f(rx)},${f(y1)} L${f(rx + rw)},${f(y1)} L${f(rx + rw)},${f(y0)} L${f(rx)},${f(y0)} Z`;
+      wash(L, d, 'c-rule', 0, 0); ink(L, d, 'b-ink');
+      for (let m = 1; m < 10; m++) { const y = y1 - m * seg / 10; ink(L, `M${f(rx)},${f(y)} l${f(m === 5 ? rw * 0.55 : rw * 0.3)},0`, 'b-hair'); }
+      el('text', { x: f(rx + rw * 0.62), y: f(y1 - seg * 0.42), class: 'b-rulenum' }, L.ink).textContent = String(k + 1);
+      el('circle', { cx: f(rx + rw / 2), cy: f(y0), r: f(rw * 0.16), class: 'c-brass' }, L.ink);
+      el('circle', { cx: f(rx + rw / 2), cy: f(y0), r: f(rw * 0.16), class: 'b-hair' }, L.ink);
+    }
+    // klippelinje og afklip
+    const cy = -H * 0.36;
+    el('path', { d: `M${f(-H * 0.62)},${f(cy)} L${f(rx)},${f(cy)}`, class: 'b-cut' }, L.ink);
+    el('path', { d: `M${f(rx - 4)},${f(cy - 3)} L${f(rx)},${f(cy)} L${f(rx - 4)},${f(cy + 3)}`, class: 'b-fine' }, L.ink);
+    const CL = el('g', { class: 'clippings' }, g), C2 = { wash: CL, ink: CL };
+    for (let i = 0; i < (plate ? 9 : 6); i++) {
+      const x = -H * 0.45 + R() * H * 0.85, y = cy - H * (0.05 + R() * 0.25);
+      const piece = el('g', { class: 'clip', transform: `translate(${f(x)} ${f(y)}) rotate(${f((R() - 0.5) * 140)})` }, CL);
+      const P = { wash: piece, ink: piece };
+      const b = blade([0, 0], 0, H * (0.06 + R() * 0.05), Math.max(1.6, H * 0.035), (R() - 0.5) * 0.4, 'leaf', 8);
+      bladeInk(P, b, { cls: 'c-leaf2', noHatch: true, noVein2: true });
+    }
+    void C2;
+  }
+
+  // Regn & vand: en zinkvandkande, der vander en lille tue, og en sky med regn.
+  function wateringCan(g, o = {}) {
+    const R = rng(o.seed || 41), H = o.height || 100, plate = o.detail === 'plate';
+    const season = o.season || 'summer';
+    const L0 = layers(g);
+    const tgx = o.compact ? H * 0.72 : H * 0.86;
+    const tips = tuft(L0, tgx, 0, H * 0.3, 7, 0.75, R, { cls: () => (season === 'winter' ? 'c-winter' : 'c-leaf') });
+    void tips;
+    for (const [dx, a] of [[-H * 0.12, -0.5], [H * 0.12, 0.45]]) {
+      const pet = blade([tgx + dx, 0], a, H * 0.2, 1, 0, 'stem', 8);
+      ink(L0, smooth(pet.C), 'b-fine');
+      for (const da of [-1.15, 0, 1.15]) leaflet(L0, pet.tip, a + da, H * 0.07, H * 0.058, { cls: 'c-clover' }, R);
+    }
+    el('ellipse', { cx: f(tgx), cy: 1.5, rx: f(H * 0.22), ry: 2.5, class: 'c-soil' }, L0.wash);
+    // sky og regn
+    const CL = layers(g);
+    const cxy = o.compact ? [H * 0.66, -H * 0.86] : [-H * 0.18, -H * 0.98];
+    cloud(CL, cxy[0], cxy[1], H * 0.085);
+    const rain = el('g', { class: 'skyrain' }, g);
+    rainLines({ wash: rain, ink: rain }, cxy[0] - H * 0.17, cxy[1] + H * 0.08, H * 0.34, H * 0.28, plate ? 16 : 9, R);
+    // kanden, vippet frem
+    const th = 20 * Math.PI / 180, ct = Math.cos(th), sn = Math.sin(th);
+    const rot = p => [p[0] * ct - p[1] * sn, p[0] * sn + p[1] * ct];
+    const C = el('g', { class: 'can', transform: 'rotate(20)' }, g), L = layers(C);
+    const w2 = H * 0.23, hgt = H * 0.42, ry = H * 0.05;
+    // tud
+    const sp0 = [w2 * 0.9, -H * 0.09], sp1 = [H * 0.78, -H * 0.6];
+    const spts = []; for (let i = 0; i <= 12; i++) { const t = i / 12; spts.push([lerp(sp0[0], sp1[0], t) + Math.sin(Math.PI * t) * H * 0.03, lerp(sp0[1], sp1[1], t)]); }
+    const spout = tube(spts, t => H * (0.055 - 0.03 * t));
+    wash(L, spout.outline, 'c-zinc'); ink(L, spout.outline, 'b-ink');
+    // bruser
+    const ang = Math.atan2(sp1[1] - spts[10][1], sp1[0] - spts[10][0]);
+    const rgx = sp1[0] + Math.cos(ang) * H * 0.03, rgy = sp1[1] + Math.sin(ang) * H * 0.03;
+    const cone = `M${f(sp1[0] - Math.sin(ang) * H * 0.014)},${f(sp1[1] + Math.cos(ang) * H * 0.014)} L${f(rgx - Math.sin(ang) * H * 0.045)},${f(rgy + Math.cos(ang) * H * 0.045)} L${f(rgx + Math.sin(ang) * H * 0.045)},${f(rgy - Math.cos(ang) * H * 0.045)} L${f(sp1[0] + Math.sin(ang) * H * 0.014)},${f(sp1[1] - Math.cos(ang) * H * 0.014)} Z`;
+    wash(L, cone, 'c-zinc'); ink(L, cone, 'b-fine');
+    const deg = ang * 180 / Math.PI + 90;
+    el('ellipse', { cx: f(rgx), cy: f(rgy), rx: f(H * 0.046), ry: f(H * 0.017), transform: `rotate(${f(deg)} ${f(rgx)} ${f(rgy)})`, class: 'c-zincd' }, L.ink);
+    el('ellipse', { cx: f(rgx), cy: f(rgy), rx: f(H * 0.046), ry: f(H * 0.017), transform: `rotate(${f(deg)} ${f(rgx)} ${f(rgy)})`, class: 'b-fine' }, L.ink);
+    // bagerste hank
+    const hk = tube([[-w2 * 0.95, -hgt * 0.92], [-w2 * 1.55, -hgt * 0.78], [-w2 * 1.62, -hgt * 0.45], [-w2 * 1.2, -hgt * 0.2], [-w2 * 0.95, -hgt * 0.16]], H * 0.032);
+    wash(L, hk.outline, 'c-zinc'); ink(L, hk.outline, 'b-ink');
+    // krop
+    const body = `M${f(-w2)},${f(-hgt)} L${f(-w2)},0 A${f(w2)},${f(ry)} 0 0 0 ${f(w2)},0 L${f(w2)},${f(-hgt)} Z`;
+    wash(L, body, 'c-zinc', 0.3, 0.3);
+    wash(L, `M${f(w2 * 0.3)},${f(-hgt)} L${f(w2 * 0.3)},${f(ry * 0.9)} A${f(w2)},${f(ry)} 0 0 0 ${f(w2)},0 L${f(w2)},${f(-hgt)} Z`, 'c-zincd', 0.2, 0.2);
+    ink(L, body, 'b-ink');
+    for (let k = 0; k < 7; k++) { const x = w2 * (0.42 + k * 0.08); ink(L, `M${f(x)},${f(-hgt + 2)} L${f(x)},${f(-1)}`, 'b-hair'); }
+    for (let k = 0; k < 3; k++) { const x = -w2 * (0.9 - k * 0.06); ink(L, `M${f(x)},${f(-hgt + 2)} L${f(x)},${f(-1)}`, 'b-hair'); }
+    ink(L, `M${f(-w2 * 0.45)},${f(-hgt + 3)} L${f(-w2 * 0.45)},${f(-3)}`, 'b-glintline');
+    for (const yy of [-hgt * 0.22, -hgt * 0.8]) ink(L, `M${f(-w2)},${f(yy)} A${f(w2)},${f(ry)} 0 0 0 ${f(w2)},${f(yy)}`, 'b-fine');
+    el('ellipse', { cx: 0, cy: f(-hgt), rx: f(w2), ry: f(ry), class: 'c-zincd' }, L.ink);
+    el('ellipse', { cx: 0, cy: f(-hgt), rx: f(w2), ry: f(ry), class: 'b-ink' }, L.ink);
+    el('ellipse', { cx: 0, cy: f(-hgt + ry * 0.25), rx: f(w2 * 0.86), ry: f(ry * 0.7), class: 'c-water' }, L.ink);
+    // øverste bøjle
+    const th2 = tube([[-w2 * 0.7, -hgt], [-w2 * 0.45, -hgt - H * 0.17], [w2 * 0.35, -hgt - H * 0.17], [w2 * 0.62, -hgt]], H * 0.026);
+    wash(L, th2.outline, 'c-zinc'); ink(L, th2.outline, 'b-ink');
+    // vandstråler fra bruseren (i sidens koordinater, så tyngdekraften virker nedad)
+    const W = el('g', { class: 'spray' }, g);
+    const rg = rot([rgx, rgy]), dir = rot([Math.cos(ang), Math.sin(ang)]);
+    for (let k = 0; k < (plate ? 15 : 11); k++) {
+      const off = (k - (plate ? 7 : 5)) * H * 0.008;
+      const sx = rg[0] - dir[1] * off, sy = rg[1] + dir[0] * off;
+      const sp = H * (o.compact ? 0.34 + R() * 0.08 : 0.42 + R() * 0.12), spread = (k - 5) * 0.04;
+      const vx = (dir[0] + spread) * sp, vy = (dir[1] - spread * 0.5) * sp;
+      const pts = [];
+      for (let i = 0; i <= 16; i++) { const t = i / 16 * 1.6; const x = sx + vx * t, y = sy + vy * t + H * 0.55 * t * t; pts.push([x, y]); if (y > -H * 0.02) break; }
+      el('path', { d: smooth(pts), class: 'b-water' }, W);
+      const e = pts[pts.length - 1];
+      el('circle', { cx: f(e[0]), cy: f(e[1] - 1), r: f(H * 0.008), class: 'c-water' }, W);
+    }
+    if (plate) {
+      const d = el('g', { transform: `translate(${f(-H * 0.55)} ${f(-H * 0.55)}) scale(2.4)` }, g), DL = layers(d);
+      el('circle', { r: 6, class: 'c-zinc' }, DL.wash); el('circle', { r: 6, class: 'b-ink' }, DL.ink);
+      el('circle', { r: 5, class: 'b-hair' }, DL.ink);
+      for (let rr = 1; rr <= 4; rr++) for (let k = 0; k < rr * 6; k++) { const a = k / (rr * 6) * Math.PI * 2; el('circle', { cx: f(Math.cos(a) * rr * 1.15), cy: f(Math.sin(a) * rr * 1.15), r: 0.28, class: 'b-dot' }, DL.ink); }
+      el('circle', { r: 0.28, class: 'b-dot' }, DL.ink);
+      el('text', { x: -9.5, y: 1.5, class: 'b-num' }, d).textContent = '1.';
+    }
+  }
+
+  // Din plæne: et snit gennem plænen med græstørv, muldlag og undergrund efter jordbunden.
+  function soilProfile(g, o = {}) {
+    const R = rng(o.seed || 51), H = o.height || 100, plate = o.detail === 'plate';
+    const soil = o.soil || 'loam', season = o.season || 'summer', rootF = o.root || 1;
+    const W = H * 0.86, D = H * 0.72, ox = H * 0.24, oy = -H * 0.13, top = -D;
+    const L = layers(g);
+    const fx0 = -W / 2, fx1 = W / 2;
+    const turf = top + D * 0.1, muld = top + D * (soil === 'sand' ? 0.3 : 0.38);
+    const wav = (y, a) => { const pts = []; for (let i = 0; i <= 10; i++) pts.push([lerp(fx0, fx1, i / 10), y + Math.sin(i * 1.7 + a) * H * 0.012]); return pts; };
+    const lay = (yA, yB, cls) => { const A = wav(yA, 1), B = wav(yB, 2.3).reverse(); return { d: poly(A.concat(B), true), cls }; };
+    const lower = soil === 'sand' ? 'c-sand' : soil === 'clay' ? 'c-clay' : 'c-loam';
+    const bands = [lay(top, turf, 'c-turf'), lay(turf, muld, 'c-muld'), lay(muld, 0, lower)];
+    const SG = el('g', { class: 'soilfront' }, g), SL = { wash: el('g', { filter: 'url(#bWash)', class: 'bw' }, SG), ink: el('g', {}, SG) };
+    for (const b of bands) wash(SL, b.d, b.cls, 0, 0);
+    // sideflade og overflade
+    const side = `M${f(fx1)},${f(top)} L${f(fx1 + ox)},${f(top + oy)} L${f(fx1 + ox)},${f(oy)} L${f(fx1)},0 Z`;
+    wash(L, side, lower, 0, 0); wash(L, side, 'c-shade', 0, 0);
+    const sideTurf = `M${f(fx1)},${f(top)} L${f(fx1 + ox)},${f(top + oy)} L${f(fx1 + ox)},${f(muld + oy)} L${f(fx1)},${f(muld)} Z`;
+    wash(L, sideTurf, 'c-muld', 0, 0); wash(L, sideTurf, 'c-shade', 0, 0);
+    for (let k = 1; k < 9; k++) { const t = k / 9; ink(L, `M${f(fx1 + ox * t)},${f(top + oy * t + 3)} L${f(fx1 + ox * t)},${f(oy * t - 2)}`, 'b-hair'); }
+    const topf = `M${f(fx0)},${f(top)} L${f(fx1)},${f(top)} L${f(fx1 + ox)},${f(top + oy)} L${f(fx0 + ox)},${f(top + oy)} Z`;
+    wash(L, topf, season === 'winter' ? 'c-winter' : 'c-leaf', 0, 0);
+    for (let k = 0; k < 40; k++) { const t = R(), u = R(); const x = fx0 + (fx1 - fx0) * t + ox * u, y = top + oy * u; ink(L, `M${f(x)},${f(y)} l${f((R() - 0.5) * 1.5)},${f(-2 - R() * 2)}`, 'b-hair'); }
+    // tekstur i lagene
+    const inFront = (x, y) => x > fx0 + 1 && x < fx1 - 1 && y > top + 1 && y < -1;
+    for (let k = 0; k < (plate ? 70 : 40); k++) { const x = lerp(fx0, fx1, R()), y = lerp(turf, muld, R()); if (inFront(x, y)) el('circle', { cx: f(x), cy: f(y), r: f(0.4 + R() * 0.7), class: 'c-crumb' }, SL.ink); }
+    if (soil === 'sand') for (let k = 0; k < (plate ? 260 : 140); k++) { const x = lerp(fx0, fx1, R()), y = lerp(muld, 0, R()); if (inFront(x, y)) el('circle', { cx: f(x), cy: f(y), r: f(0.25 + R() * 0.3), class: 'b-dot' }, SL.ink); }
+    if (soil === 'clay') for (let k = 0; k < 9; k++) { const y = lerp(muld + 4, -3, k / 8); ink(SL, smooth(wav(y, k).map(p => [p[0], p[1] + (R() - 0.5)]).slice(1, 10)), 'b-hair'); }
+    if (soil !== 'sand') for (let k = 0; k < (plate ? 60 : 30); k++) { const x = lerp(fx0, fx1, R()), y = lerp(muld, 0, R()); if (inFront(x, y)) el('circle', { cx: f(x), cy: f(y), r: f(0.4 + R() * 0.6), class: 'c-crumb' }, SL.ink); }
+    for (let k = 0; k < (soil === 'sand' ? 5 : 3); k++) {
+      const x = lerp(fx0 + 6, fx1 - 6, R()), y = lerp(muld + 5, -5, R()), r = H * (0.02 + R() * 0.025);
+      const st = `M${f(x - r)},${f(y)} C${f(x - r)},${f(y - r * 0.8)} ${f(x + r)},${f(y - r * 0.9)} ${f(x + r)},${f(y)} C${f(x + r)},${f(y + r * 0.7)} ${f(x - r)},${f(y + r * 0.8)} ${f(x - r)},${f(y)} Z`;
+      wash(SL, st, 'c-stone', 0, 0); ink(SL, st, 'b-fine');
+      ink(SL, `M${f(x - r * 0.4)},${f(y + r * 0.2)} l${f(r * 0.6)},${f(r * 0.3)}`, 'b-hair');
+    }
+    // regnorm i muldlaget
+    if (soil !== 'sand' || plate) {
+      const wy = lerp(muld, 0, 0.35), wx = lerp(fx0, fx1, 0.62);
+      const wp = []; for (let i = 0; i <= 14; i++) wp.push([wx - H * 0.12 + i * H * 0.017, wy + Math.sin(i * 0.7) * H * 0.02]);
+      const wt = tube(wp, t => H * 0.022 * (0.6 + 0.4 * Math.sin(Math.PI * t)));
+      const WG = el('g', { class: 'worm' }, SG), WL = { wash: WG, ink: WG };
+      el('path', { d: wt.outline, class: 'c-worm' }, WG); ink(WL, wt.outline, 'b-fine');
+      for (let i = 2; i < 13; i += 1.5) { const p = wp[Math.floor(i)]; ink(WL, `M${f(p[0])},${f(p[1] - H * 0.009)} l0,${f(H * 0.018)}`, 'b-hair'); }
+    }
+    // rødder ned i jorden
+    const RG = el('g', { class: 'roots' }, SG), RL = { wash: RG, ink: RG };
+    const depth = Math.min(-2, top + D * (0.45 + 0.4 * (rootF - 0.9)));
+    for (let k = 0; k < (plate ? 22 : 14); k++) {
+      const x0 = lerp(fx0 + 4, fx1 - 4, (k + R() * 0.6) / (plate ? 22 : 14));
+      const pts = [[x0, top]]; let x = x0, y = top, a = (R() - 0.5) * 0.4;
+      while (y < depth) { a += (R() - 0.5) * 0.45; a = Math.max(-0.6, Math.min(0.6, a)); x += Math.sin(a) * H * 0.04; y += H * 0.04 * (0.7 + R() * 0.5); pts.push([Math.max(fx0 + 1, Math.min(fx1 - 1, x)), Math.min(y, depth)]); }
+      ink(RL, smooth(pts), 'b-root');
+    }
+    ink(SL, `M${f(fx0)},${f(top)} L${f(fx0)},0 L${f(fx1)},0 L${f(fx1)},${f(top)}`, 'b-ink');
+    for (const yy of [turf, muld]) ink(SL, smooth(wav(yy, yy)), 'b-fine');
+    ink(L, `M${f(fx0)},${f(top)} L${f(fx0 + ox)},${f(top + oy)} L${f(fx1 + ox)},${f(top + oy)} L${f(fx1 + ox)},${f(oy)} L${f(fx1)},0 M${f(fx1)},${f(top)} L${f(fx1 + ox)},${f(top + oy)} M${f(fx0)},${f(top)} L${f(fx1)},${f(top)}`, 'b-ink');
+    // græs og en tusindfryd på toppen
+    const GT = layers(g);
+    tuft(GT, lerp(fx0, fx1, 0.25), top, H * 0.36, 7, 0.7, R, { cls: () => (season === 'winter' ? 'c-winter' : 'c-leaf') });
+    tuft(GT, lerp(fx0, fx1, 0.78) + ox * 0.4, top + oy * 0.4, H * 0.32, 6, 0.6, R, { cls: () => (season === 'winter' ? 'c-winter' : 'c-leaf') });
+    if (o.kind && season !== 'winter') {
+      const st = blade([lerp(fx0, fx1, 0.5), top], 0.08, H * 0.34, 1.6, -0.1, 'stem', 14);
+      bladeInk(GT, st, { cls: season === 'autumn' ? 'c-straw' : 'c-leaf2', noHatch: true, noVein2: true });
+      inflorescence(GT, st.tip, 0.08, H * 0.16, o.kind, season, R);
+    }
+    if (season !== 'winter') {
+      const sc = blade([lerp(fx0, fx1, 0.1) + ox * 0.6, top + oy * 0.6], -0.25, H * 0.24, 1, 0.1, 'stem', 10);
+      ink(GT, smooth(sc.C), 'b-fine');
+      bellisHead(GT, sc.tip[0], sc.tip[1] - 1, H * 0.06, 0.6, -0.2, R);
+    }
+    if (plate) {
+      const lx = fx1 + ox + 6;
+      [['a.', (top + turf) / 2 + oy], ['b.', (turf + muld) / 2 + oy], ['c.', muld / 2 + oy]].forEach(([t, y]) => {
+        el('text', { x: f(lx), y: f(y + 2), class: 'b-numL' }, g).textContent = t;
+      });
+    }
+  }
+
   /* ------------------------------ symboler ------------------------------ */
   function emblem(g, kind) {
     const L = layers(g);
@@ -563,5 +856,5 @@ const Botany = (() => {
     }
   }
 
-  return { el, rng, ensureDefs, grass, alchemilla, trifolium, bellis, emblem, nextId: () => 'b' + (++uid) };
+  return { el, rng, ensureDefs, grass, alchemilla, trifolium, bellis, emblem, scythe, measure, wateringCan, soilProfile, nextId: () => 'b' + (++uid) };
 })();
