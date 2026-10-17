@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src https://api.open-meteo.com https://geocoding-api.open-meteo.com; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Slåvejr</title>
+<meta name="description" content="Beregner ud fra vejrudsigten, hvornår græsset er tørt nok til at slå.">
+<meta name="theme-color" content="#edf1ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1612" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21c1-6 1-10 0-15M9 21c0-5 1-9 3-13M14 21c0-4-.5-7-2-10M19 21c-.5-5 0-9 2-12" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/><circle cx="17.5" cy="4.5" r="1.8" fill="var(--st-wet)"/></svg>
+      Slåvejr
+    </div>
+    <button class="loc-btn" id="locBtn" aria-expanded="false" aria-controls="locPanel">
+      <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s7-7.2 7-12a7 7 0 1 0-14 0c0 4.8 7 12 7 12z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="10" r="2.5" fill="currentColor"/></svg>
+      <span id="locName">København</span>
+    </button>
+  </header>
+
+  <section class="loc-panel" id="locPanel" hidden>
+    <form class="loc-row" id="searchForm">
+      <input id="searchInput" type="search" placeholder="Søg efter by eller adresseområde" autocomplete="off" aria-label="Søg efter sted">
+      <button class="btn" type="submit">Søg</button>
+    </form>
+    <ul class="results" id="results"></ul>
+    <div class="loc-row">
+      <button class="btn primary" id="geoBtn" type="button">Brug min position</button>
+    </div>
+    <p class="hint" id="locHint"></p>
+  </section>
+
+  <div class="banner" id="banner" hidden>
+    <p id="bannerText"></p>
+    <button class="btn" id="retryBtn" type="button">Prøv igen</button>
+  </div>
+
+  <section class="verdict" aria-live="polite">
+    <p class="eyebrow" id="eyebrow">Henter vejrudsigt…</p>
+    <h1 id="headline"><span class="skeleton">Regner på græsset…</span></h1>
+    <p class="reason" id="reason"></p>
+    <div class="film" id="film" hidden>
+      <span>Vand på stråene</span>
+      <div class="film-track"><div class="film-fill" id="filmFill"></div></div>
+      <span class="num" id="filmVal"></span>
+    </div>
+    <div class="next" id="next" hidden>
+      <span class="lbl" id="nextLbl">Næste tørre vindue</span>
+      <span class="when" id="nextWhen"></span>
+      <span class="meta" id="nextMeta"></span>
+    </div>
+  </section>
+
+  <section class="tl" id="tl" hidden>
+    <div class="tl-head">
+      <h2>Time for time</h2>
+      <div class="legend">
+        <span><i class="st-dry"></i>Tørt</span>
+        <span><i class="st-soft"></i>Tørt, blød jord</span>
+        <span><i class="st-damp"></i>Fugtigt</span>
+        <span><i class="st-wet"></i>Vådt</span>
+        <span><i class="st-rain"></i>Regn</span>
+        <span><i class="st-frost"></i>Frost</span>
+        <span><i class="st-dry dim"></i>Mørkt</span>
+      </div>
+    </div>
+    <div class="axis" aria-hidden="true"><span></span><div><span>00</span><span>06</span><span>12</span><span>18</span></div></div>
+    <div class="days" id="days"></div>
+    <div class="detail" id="detail">Tryk på en time for at se detaljer.</div>
+  </section>
+
+  <section class="settings">
+    <h2>Din plæne</h2>
+    <fieldset class="field">
+      <legend>Sol på plænen</legend>
+      <div class="seg">
+        <input type="radio" name="site" id="site-sun" value="sun"><label for="site-sun">Sol det meste af dagen</label>
+        <input type="radio" name="site" id="site-half" value="half"><label for="site-half">Halvskygge</label>
+        <input type="radio" name="site" id="site-shade" value="shade"><label for="site-shade">Skygge</label>
+      </div>
+    </fieldset>
+    <fieldset class="field">
+      <legend>Græslængde</legend>
+      <div class="seg">
+        <input type="radio" name="grass" id="grass-short" value="short"><label for="grass-short">Kort (under 5 cm)</label>
+        <input type="radio" name="grass" id="grass-normal" value="normal"><label for="grass-normal">Normal</label>
+        <input type="radio" name="grass" id="grass-long" value="long"><label for="grass-long">Lang (over 10 cm)</label>
+      </div>
+    </fieldset>
+    <fieldset class="field">
+      <legend>Tid til at slå græsset</legend>
+      <div class="seg">
+        <input type="radio" name="dur" id="dur-30" value="30"><label for="dur-30">30 min</label>
+        <input type="radio" name="dur" id="dur-60" value="60"><label for="dur-60">1 time</label>
+        <input type="radio" name="dur" id="dur-90" value="90"><label for="dur-90">1½ time</label>
+        <input type="radio" name="dur" id="dur-120" value="120"><label for="dur-120">2 timer</label>
+      </div>
+    </fieldset>
+  </section>
+
+  <details>
+    <summary>Sådan regner Slåvejr</summary>
+    <div class="explain">
+      <p>Programmet henter timeprognosen for din position og fører regnskab med den vandfilm, der sidder på græsstråene, time for time i millimeter. Det starter to døgn tilbage, så nattens dug og gårsdagens regn er med.</p>
+      <ul>
+        <li><b>Regn</b> fylder græsset op til det, stråene kan holde: ca. 0,35 mm for kort græs, 0,5 mm for normalt og 0,8 mm for langt. Resten drypper ned i jorden.</li>
+        <li><b>Dug</b>: Om natten udstråler græsset varme mod himlen. Når overfladen bliver koldere end luftens dugpunkt, kondenserer vand på stråene. Skyer og vind bremser det.</li>
+        <li><b>Fordampning</b>: Om dagen tørrer sol, vind og tør luft græsset. Både dug og fordampning beregnes med Penman–Monteith-ligningen for en våd overflade (FAO-56), ud fra solindstråling, skydække, temperatur, luftfugtighed og vind.</li>
+        <li><b>Frost</b>: Græssets overfladetemperatur skønnes ud fra udstrålingen. Under 0 °C regnes græsset som frosset, og det skal ikke slås.</li>
+        <li><b>Blød jord</b>: En simpel regnbalance over det seneste døgn. Står der mere end ca. 6 mm regn, der ikke er drænet eller fordampet, markeres jorden som blød.</li>
+      </ul>
+      <p>En time tæller som <b>tør</b>, når der er under 0,02 mm vand på stråene hele timen, ingen regn, ingen frost og dagslys. Et vindue skal være mindst så langt som den tid, du har valgt.</p>
+      <p>Prognosen gælder for et gitter på et par kilometer. Hække, træer og lavninger i haven giver lokale forskelle, så brug indstillingerne for sol og skygge og mærk efter med hånden de første gange.</p>
+    </div>
+  </details>
+
+  <footer>
+    Vejrdata: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> (CC BY 4.0). <span id="updated"></span>
+  </footer>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
