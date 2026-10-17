@@ -111,6 +111,82 @@ function findWindows(blocks, i0, nowT, minMin) {
   return wins;
 }
 
+// Regnhændelser: timer med regn, slået sammen når pausen er højst 2 timer. Regn ved tidsstempel t faldt i timen før t.
+function rainEvents(st, minTotal = 0.2) {
+  const ev = [];
+  let cur = null;
+  for (let i = 0; i < st.length; i++) {
+    const s = st[i];
+    if (s.P < 0.1) continue;
+    if (cur && s.t - cur.lastT <= 3 * 36e5) {
+      cur.lastT = s.t; cur.end = s.t; cur.total += s.P; cur.maxP = Math.max(cur.maxP, s.P);
+      cur.maxProb = Math.max(cur.maxProb, num(s.prob, 0));
+    } else {
+      if (cur) ev.push(cur);
+      cur = { start: s.t - 36e5, end: s.t, lastT: s.t, total: s.P, maxP: s.P, maxProb: num(s.prob, 0) };
+    }
+  }
+  if (cur) ev.push(cur);
+  return ev.filter(e => e.total >= minTotal);
+}
+function lastAndNextRain(st, now) {
+  const ev = rainEvents(st);
+  let last = null, next = null, ongoing = null;
+  for (const e of ev) {
+    if (e.start <= now && now < e.end) ongoing = e;
+    else if (e.end <= now) last = e;
+    else if (e.start > now && !next) next = e;
+  }
+  let soFar = 0;
+  if (ongoing) for (const s of st) if (s.t > ongoing.start && s.t <= now + 36e5 && s.t <= ongoing.end) soFar += s.P;
+  return { last, next, ongoing, soFar, coverFrom: st.length ? st[0].t : now };
+}
+
+// Anbefalet klippehøjde ud fra årstid, temperatur, tørke, skygge og græslængde.
+function cutAdvice(st, now, opts, lat) {
+  const d = new Date(now);
+  const m = lat < 0 ? (d.getUTCMonth() + 6) % 12 : d.getUTCMonth();
+  let sumT = 0, nT = 0, maxT = -99, rain7 = 0, minTs = 99;
+  for (const s of st) {
+    if (s.t >= now - 3 * 864e5 && s.t <= now + 2 * 864e5) { sumT += s.T; nT++; }
+    if (s.t > now && s.t <= now + 2 * 864e5) maxT = Math.max(maxT, s.T);
+    if (s.t > now && s.t <= now + 864e5) minTs = Math.min(minTs, s.Ts);
+    if (s.t <= now && s.t > now - 7 * 864e5) rain7 += s.P;
+  }
+  const meanT = nT ? sumT / nT : 10;
+  if (maxT === -99) maxT = meanT;
+  const shade = opts.site === 'shade' ? 1 : opts.site === 'half' ? 0.5 : 0;
+  const why = [];
+  let lo = 4, hi = 5, mode = 'mow', title;
+
+  if (m === 11 || m <= 1) {
+    if (meanT >= 8) { lo = 5; hi = 6; title = 'Mildt vintervejr'; why.push('Græsset kan gro lidt i mildt vejr. Slå kun, hvis det er over ca. 7 cm, og hold det højt.'); }
+    else { mode = 'rest'; lo = 5; hi = 6; title = 'Plænen hviler'; why.push('Om vinteren gror græsset næsten ikke, så der er ikke brug for at slå det.'); }
+  } else if (m <= 3) {
+    lo = 5; hi = 6; title = 'Forår';
+    why.push('De første klipninger efter vinteren skal være høje, så græsset kommer sig. Sænk gradvist til normal højde.');
+  } else if (m <= 8) {
+    title = m >= 6 && m <= 7 ? 'Sommer' : 'Vækstsæson';
+    const drought = rain7 < 5 && maxT >= 22;
+    if (maxT >= 25 || drought) {
+      lo = 6; hi = 7;
+      why.push(maxT >= 25 ? `Varmt vejr (op til ${Math.round(maxT)} °C). Højere græs klarer varme og tørke bedre og skygger for jorden.`
+                          : `Kun ${String(Math.round(rain7 * 10) / 10).replace('.', ',')} mm regn den seneste uge. Højere græs klarer tørke bedre.`);
+    } else why.push('Normal vækst. Klip aldrig under 4 cm.');
+  } else {
+    title = 'Efterår';
+    why.push('Sidste klipning ligger typisk i slutningen af oktober. Klip ikke for kort, så plænen går godt ind i vinteren.');
+  }
+  if (mode === 'mow' && meanT < 5) { mode = 'rest'; why.unshift(`Det er koldt (gennemsnit ca. ${Math.round(meanT)} °C), og græsset gror næsten ikke. Der er ikke brug for at slå det nu.`); }
+  else if (mode === 'mow' && meanT < 8 && m >= 9) why.unshift(`Græsset gror langsomt ved ca. ${Math.round(meanT)} °C, så du skal slå sjældnere.`);
+  if (shade) { lo += shade; hi += shade; why.push('I skygge skal græsset stå lidt højere, så det kan fange mere lys.'); }
+  if (minTs <= 0) why.push('Der er frost i prognosen. Slå aldrig frosset græs, og gå helst ikke på det.');
+  why.push(opts.grass === 'long'
+    ? 'Dit græs er langt. Fjern højst en tredjedel ad gangen, og tag resten om et par dage.'
+    : 'Fjern højst en tredjedel af længden ad gangen.');
+  return { lo, hi, mode, title, why, meanT, maxT, rain7 };
+}
+
 // Syntetiske oktoberdata til demo og test (ikke en rigtig prognose).
 function sampleData(startUTCms) {
   const n = 6 * 24 + 1, time = [], T = [], RH = [], W = [], R = [], C = [], P = [], PP = [], D = [], E = [];
@@ -157,7 +233,8 @@ const store = {
 const DEFAULT_LOC = { name: 'København', lat: 55.68, lon: 12.57 };
 // Positionen afrundes til 2 decimaler (ca. 1 km). Prognosens gitter er alligevel grovere, og det præcise sted forlader aldrig telefonen.
 function cleanLoc(l) {
-  const lat = Number(l && l.lat), lon = Number(l && l.lon);
+  if (!l || typeof l !== 'object' || l.lat === null || l.lon === null || l.lat === '' || l.lon === '') return null;
+  const lat = Number(l.lat), lon = Number(l.lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
   return { name: String((l && l.name) || 'Valgt sted').slice(0, 60), lat: Math.round(lat * 100) / 100, lon: Math.round(lon * 100) / 100 };
 }
@@ -176,9 +253,10 @@ const dayKey = t => new Date(t).toISOString().slice(0, 10);
 const mm = (v, dec = 2) => v.toFixed(dec).replace('.', ',');
 function nowLocal() { return Date.now() + (data ? data.utc_offset_seconds * 1000 : 0); }
 function dayName(t, ref) {
-  const k = dayKey(t), today = dayKey(ref), tom = dayKey(ref + 864e5);
+  const k = dayKey(t), today = dayKey(ref), tom = dayKey(ref + 864e5), yest = dayKey(ref - 864e5);
   if (k === today) return 'i dag';
   if (k === tom) return 'i morgen';
+  if (k === yest) return 'i går';
   const d = new Date(t);
   return DAYS[d.getUTCDay()] + ' ' + d.getUTCDate() + '.';
 }
@@ -209,7 +287,7 @@ function run() {
   if (!data) return;
   const sim = simulate(data.hourly, data.elevation, opts);
   const blocks = toBlocks(sim.st);
-  model = { blocks, cap: sim.cap };
+  model = { blocks, cap: sim.cap, st: sim.st };
   render();
 }
 
@@ -250,6 +328,10 @@ function render() {
   $('filmFill').style.width = Math.min(100, Wnow / cap * 100) + '%';
   $('filmVal').textContent = `${mm(Wnow)} / ${mm(cap)} mm`;
 
+  drawScene(model.st, cur, Wnow, cap, now);
+  renderRain(model.st, now);
+  renderCut(model.st, now);
+
   // næste vindue
   const nextW = wins.find(w => !(curWin && w.k === curWin.k));
   $('next').hidden = false;
@@ -264,7 +346,278 @@ function render() {
 
   renderDays(blocks, now, ci);
   $('tl').hidden = false;
+  model.now = now;
+  drawChart();
 }
+
+/* ---------- regn og klippehøjde ---------- */
+function agoTxt(ms) {
+  const h = ms / 36e5;
+  if (h < 1) return 'under en time siden';
+  if (h < 48) return `for ${Math.round(h)} ${Math.round(h) === 1 ? 'time' : 'timer'} siden`;
+  return `for ${Math.round(h / 24)} døgn siden`;
+}
+function untilTxt(ms) {
+  const h = ms / 36e5;
+  if (h < 1) return 'inden for en time';
+  if (h < 48) return `om ca. ${Math.round(h)} ${Math.round(h) === 1 ? 'time' : 'timer'}`;
+  return `om ca. ${Math.round(h / 24)} døgn`;
+}
+function renderRain(st, now) {
+  const r = lastAndNextRain(st, now);
+  if (r.ongoing) {
+    $('lastRainLbl').textContent = 'Regn';
+    $('lastRainVal').textContent = 'Det regner nu';
+    $('lastRainSub').textContent = `Siden ${dayName(r.ongoing.start, now)} ${hhmm(r.ongoing.start)} · ca. ${mm(Math.max(r.soFar, 0.1), 1)} mm indtil nu`;
+  } else if (r.last) {
+    $('lastRainLbl').textContent = 'Sidste regn';
+    $('lastRainVal').textContent = span(r.last, now);
+    $('lastRainSub').textContent = `${mm(r.last.total, 1)} mm · ${agoTxt(now - r.last.end)}`;
+  } else {
+    const days = Math.max(1, Math.floor((now - r.coverFrom) / 864e5));
+    $('lastRainLbl').textContent = 'Sidste regn';
+    $('lastRainVal').textContent = `Over ${days} døgn siden`;
+    $('lastRainSub').textContent = `Ingen regn i de ${days} døgn, vejrmodellen dækker`;
+  }
+  if (r.next) {
+    $('nextRainVal').textContent = span(r.next, now);
+    $('nextRainSub').textContent = `ca. ${mm(r.next.total, 1)} mm · ${untilTxt(r.next.start - now)}` + (r.next.maxProb ? ` · risiko ${r.next.maxProb} %` : '');
+  } else {
+    $('nextRainVal').textContent = 'Ingen i prognosen';
+    $('nextRainSub').textContent = `Tørvejr frem til ${dayName(st[st.length - 1].t - 1, now)}`;
+  }
+  $('facts').hidden = false;
+}
+function renderCut(st, now) {
+  const a = cutAdvice(st, now, opts, isSample ? 55.7 : loc.lat);
+  const range = a.lo === a.hi ? `${mm(a.lo, a.lo % 1 ? 1 : 0)} cm` : `${mm(a.lo, a.lo % 1 ? 1 : 0)}–${mm(a.hi, a.hi % 1 ? 1 : 0)} cm`;
+  $('cutSeason').textContent = a.title.toLowerCase();
+  const v = $('cutVal'); v.textContent = '';
+  if (a.mode === 'rest') {
+    v.append(document.createTextNode('Slå ikke nu'));
+    const s = document.createElement('small'); s.textContent = `ellers ${range}`; v.append(s);
+  } else v.textContent = range;
+  const ul = $('cutWhy'); ul.textContent = '';
+  for (const w of a.why.slice(0, 4)) { const li = document.createElement('li'); li.textContent = w; ul.append(li); }
+  drawRuler(a);
+  $('cut').hidden = false;
+}
+
+/* ---------- tegning ---------- */
+const SVGNS = 'http://www.w3.org/2000/svg';
+function el(name, attrs, parent) {
+  const e = document.createElementNS(SVGNS, name);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.append(e);
+  return e;
+}
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function bladePath(x, base, w, h, lean) {
+  const tx = x + lean, ty = base - h;
+  return `M${(x - w / 2).toFixed(1)},${base} C${(x - w / 2).toFixed(1)},${(base - h * 0.5).toFixed(1)} ${(x + lean * 0.6 - 1).toFixed(1)},${(base - h * 0.82).toFixed(1)} ${tx.toFixed(1)},${ty.toFixed(1)} ` +
+         `C${(x + lean * 0.6 + 1).toFixed(1)},${(base - h * 0.82).toFixed(1)} ${(x + w / 2).toFixed(1)},${(base - h * 0.5).toFixed(1)} ${(x + w / 2).toFixed(1)},${base} Z`;
+}
+const GRASS_COL = {
+  day:      ['#2e5d35', '#3d7a45', '#5e9f55'],
+  overcast: ['#2e5a35', '#3b7343', '#57924f'],
+  rain:     ['#2a5432', '#376c40', '#4f8a4b'],
+  frost:    ['#6c877a', '#86a294', '#adc5b8'],
+  dusk:     ['#22462b', '#2f5c3a', '#4b7f45'],
+  night:    ['#0e1f15', '#163022', '#21422c'],
+};
+function drawScene(st, cur, Wnow, cap, now) {
+  const svg = $('scene'); svg.textContent = '';
+  const today = dayKey(now);
+  const dayStamps = st.filter(s => dayKey(s.t) === today && s.isDay);
+  const sunrise = dayStamps.length ? dayStamps[0].t - 18e5 : Date.parse(today + 'T07:00:00Z');
+  const sunset = dayStamps.length ? dayStamps[dayStamps.length - 1].t + 18e5 : Date.parse(today + 'T18:00:00Z');
+  const near = Math.min(Math.abs(now - sunrise), Math.abs(now - sunset)) < 36e5;
+  const ccNow = cur ? (st.find(s => s.t >= now) || st[st.length - 1]).cc : 0.3;
+  let phase;
+  if (cur.dark) phase = near ? 'dusk' : 'night';
+  else if (cur.status === 'rain') phase = 'rain';
+  else if (cur.status === 'frost') phase = 'frost';
+  else if (near) phase = 'dusk';
+  else if (ccNow > 0.7) phase = 'overcast';
+  else phase = 'day';
+  $('hero').className = 'hero phase-' + phase;
+  const R = rng(7);
+
+  const defs = el('defs', {}, svg);
+  const g = el('linearGradient', { id: 'skyGrad', x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
+  el('stop', { offset: '0', class: 'sky-top' }, g);
+  el('stop', { offset: '1', class: 'sky-bot' }, g);
+  el('rect', { x: -200, y: -200, width: 800, height: 440, fill: 'url(#skyGrad)' }, svg);
+
+  if (phase === 'night') {
+    for (let i = 0; i < 26; i++) el('circle', { cx: (R() * 440 - 20).toFixed(1), cy: (R() * 110).toFixed(1), r: (0.5 + R() * 1.1).toFixed(2), fill: '#ffffff', class: R() > 0.5 ? 'twinkle' : '', opacity: (0.5 + R() * 0.5).toFixed(2) }, svg);
+    el('path', { d: 'M318,22 A20,20 0 1,0 338,58 A16,16 0 1,1 318,22 Z', fill: '#f3efd9' }, svg);
+  } else if (phase !== 'rain') {
+    const f = clamp((now - sunrise) / (sunset - sunrise), 0, 1);
+    const sx = 40 + f * 320, sy = 128 - Math.sin(f * Math.PI) * 92;
+    const dim = phase === 'overcast' ? 0.45 : 1;
+    el('circle', { cx: sx, cy: sy, r: 40, fill: '#fff3c4', opacity: (0.35 * dim).toFixed(2) }, svg);
+    el('circle', { cx: sx, cy: sy, r: 19, fill: phase === 'dusk' ? '#ffc06b' : '#ffd95e', opacity: dim }, svg);
+  }
+
+  const nClouds = phase === 'rain' ? 4 : ccNow > 0.85 ? 4 : ccNow > 0.55 ? 3 : ccNow > 0.25 ? 2 : ccNow > 0.08 ? 1 : 0;
+  const cloudCol = phase === 'night' ? '#3d4d63' : phase === 'rain' ? '#a9b4be' : phase === 'overcast' ? '#eef1f3' : phase === 'dusk' ? '#f4d6c0' : '#ffffff';
+  const spots = [[70, 40], [250, 26], [170, 70], [345, 62]];
+  for (let i = 0; i < nClouds; i++) {
+    const [cx, cy] = spots[i], s = 0.8 + R() * 0.5;
+    const cg = el('g', { fill: cloudCol, opacity: phase === 'rain' ? 0.95 : 0.88, transform: `translate(${cx} ${cy}) scale(${s.toFixed(2)})` }, svg);
+    el('ellipse', { cx: 0, cy: 6, rx: 38, ry: 11 }, cg);
+    el('circle', { cx: -14, cy: 0, r: 14 }, cg);
+    el('circle', { cx: 6, cy: -6, r: 18 }, cg);
+    el('circle', { cx: 24, cy: 2, r: 12 }, cg);
+  }
+  if (phase === 'rain') {
+    const rg = el('g', { stroke: '#eef4fa', 'stroke-width': 1.3, 'stroke-linecap': 'round', opacity: 0.75 }, svg);
+    for (let i = 0; i < 60; i++) {
+      const x = R() * 420 - 10, y = R() * 160 - 20;
+      const ln = el('line', { x1: x.toFixed(1), y1: y.toFixed(1), x2: (x - 3).toFixed(1), y2: (y + 11).toFixed(1), class: 'raindrop' }, rg);
+      ln.style.animationDelay = (-R() * 0.9).toFixed(2) + 's';
+      ln.style.animationDuration = (0.7 + R() * 0.4).toFixed(2) + 's';
+    }
+  }
+
+  const [cGround, cBack, cFront] = GRASS_COL[phase];
+  el('rect', { x: -200, y: 206, width: 800, height: 40, fill: cGround }, svg);
+  const back = el('g', { class: 'sway slow', fill: cBack }, svg);
+  for (let i = 0; i < 90; i++) {
+    const x = -14 + i * 4.8 + R() * 3;
+    el('path', { d: bladePath(x, 222, 5 + R() * 3, 34 + R() * 34, (R() - 0.5) * 22) }, back);
+  }
+  const front = el('g', { class: 'sway' }, svg);
+  const tips = [];
+  for (let i = 0; i < 70; i++) {
+    const x = -10 + i * 6.1 + R() * 4, h = 40 + R() * 40, lean = (R() - 0.5) * 26;
+    el('path', { d: bladePath(x, 224, 5 + R() * 3.5, h, lean), fill: cFront }, front);
+    tips.push([x + lean, 224 - h]);
+  }
+  const wf = clamp(Wnow / cap, 0, 1);
+  if (phase === 'frost') {
+    for (const [tx, ty] of tips) el('path', { d: `M${(tx - 2.5).toFixed(1)},${(ty + 2).toFixed(1)} L${tx.toFixed(1)},${(ty - 1).toFixed(1)} L${(tx + 2.5).toFixed(1)},${(ty + 2).toFixed(1)}`, fill: 'none', stroke: '#ffffff', 'stroke-width': 1.6, 'stroke-linecap': 'round', opacity: 0.9 }, front);
+  } else if (Wnow > DRY_MM) {
+    const n = Math.max(4, Math.round(wf * 34));
+    const order = tips.map((t, i) => [rng(i + 11)(), t]).sort((a, b) => a[0] - b[0]).slice(0, n);
+    for (const [, [tx, ty]] of order) {
+      el('circle', { cx: tx.toFixed(1), cy: (ty + 2.6).toFixed(1), r: (1.9 + wf * 1.1).toFixed(2), fill: 'rgba(226,241,255,.92)', stroke: '#86b2dc', 'stroke-width': 0.7 }, front);
+      el('circle', { cx: (tx - 0.7).toFixed(1), cy: (ty + 1.8).toFixed(1), r: 0.7, fill: '#ffffff' }, front);
+    }
+  }
+}
+
+function drawRuler(a) {
+  const svg = $('ruler'); svg.textContent = '';
+  const base = 166, cm = 14, x0 = 26;
+  const yOf = c => base - c * cm;
+  el('line', { x1: x0, y1: yOf(11), x2: x0, y2: base, class: 'tick', 'stroke-width': 1.2 }, svg);
+  for (let c = 0; c <= 11; c++) {
+    const long = c % 2 === 0;
+    el('line', { x1: x0, y1: yOf(c), x2: x0 + (long ? 9 : 5), y2: yOf(c), class: 'tick', 'stroke-width': 1 }, svg);
+    if (long) { const t = el('text', { x: x0 - 5, y: yOf(c) + 3.5, 'text-anchor': 'end' }, svg); t.textContent = String(c); }
+  }
+  const tcm = el('text', { x: x0 - 5, y: yOf(11) - 2, 'text-anchor': 'end' }, svg); tcm.textContent = 'cm';
+  const len = { short: 4.2, normal: 7.5, long: 11 }[opts.grass] || 7.5;
+  const cut = Math.min((a.lo + a.hi) / 2, len);
+  const cutY = yOf(cut);
+  const defs = el('defs', {}, svg);
+  const cb = el('clipPath', { id: 'clipBelow' }, defs); el('rect', { x: 0, y: cutY, width: 128, height: base - cutY + 10 }, cb);
+  const ca = el('clipPath', { id: 'clipAbove' }, defs); el('rect', { x: 0, y: 0, width: 128, height: cutY }, ca);
+  const R = rng(3), blades = [];
+  for (let i = 0; i < 11; i++) blades.push(bladePath(46 + i * 7 + R() * 2, base, 5 + R() * 2, len * cm * (0.86 + R() * 0.2), (R() - 0.5) * 10));
+  const above = el('g', { 'clip-path': 'url(#clipAbove)', class: 'blade-top' }, svg);
+  const below = el('g', { 'clip-path': 'url(#clipBelow)', class: 'blade' }, svg);
+  for (const d of blades) { el('path', { d }, above); el('path', { d }, below); }
+  el('line', { x1: x0, y1: cutY, x2: 126, y2: cutY, class: 'cutline', 'stroke-width': 1.4, 'stroke-dasharray': '4 3' }, svg);
+  const lab = el('text', { x: 126, y: cutY - 5, 'text-anchor': 'end', class: 'cutlabel' }, svg);
+  lab.textContent = a.mode === 'rest' ? 'hvile' : `klip her`;
+}
+
+function drawChart() {
+  if (!model || model.now === undefined) return;
+  const { blocks, st, cap, now } = model;
+  const svg = $('chart'); svg.textContent = '';
+  const W = Math.max(280, Math.round($('chartWrap').clientWidth || 680)), H = 190;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const L = 34, Rm = 6, T = 26, B = H - 34, stripY = H - 26;
+  const t0 = Date.parse(dayKey(now) + 'T00:00:00Z');
+  const t1 = blocks[blocks.length - 1].end;
+  const X = t => L + (t - t0) / (t1 - t0) * (W - L - Rm);
+  const Y = w => B - clamp(w / cap, 0, 1) * (B - T);
+  const pxH = (W - L - Rm) / ((t1 - t0) / 36e5);
+
+  // nat
+  let ns = null;
+  const inRange = blocks.filter(b => b.start >= t0);
+  inRange.forEach((b, i) => {
+    if (b.dark && ns === null) ns = b.start;
+    const endRun = ns !== null && (!b.dark || i === inRange.length - 1);
+    if (endRun) { const e = b.dark ? b.end : b.start; el('rect', { x: X(ns).toFixed(1), y: T - 8, width: (X(e) - X(ns)).toFixed(1), height: B - T + 8, class: 'night' }, svg); ns = null; }
+  });
+  // gitter, dage
+  el('line', { x1: L, y1: B, x2: W - Rm, y2: B, class: 'grid' }, svg);
+  el('line', { x1: L, y1: T, x2: W - Rm, y2: T, class: 'grid', 'stroke-dasharray': '2 4' }, svg);
+  const y0 = el('text', { x: L - 6, y: B + 4, 'text-anchor': 'end' }, svg); y0.textContent = '0';
+  const y1 = el('text', { x: L - 6, y: T + 4, 'text-anchor': 'end' }, svg); y1.textContent = mm(cap, 1);
+  const yu = el('text', { x: L - 6, y: T - 10, 'text-anchor': 'end' }, svg); yu.textContent = 'mm';
+  const pxDay = pxH * 24;
+  for (let d = t0; d < t1; d += 864e5) {
+    if (d > t0) el('line', { x1: X(d), y1: T - 12, x2: X(d), y2: stripY + 6, class: 'grid' }, svg);
+    const nm = dayName(d, now);
+    const dd = new Date(d);
+    const txt = pxDay < 95 ? (nm === 'i dag' ? 'I dag' : DAYS[dd.getUTCDay()].replace(/^./, c => c.toUpperCase())) : nm.replace(/^./, c => c.toUpperCase());
+    const t = el('text', { x: X(d) + 4, y: T - 13, class: 'daylbl' }, svg); t.textContent = txt;
+    for (const hh of pxDay >= 150 ? [6, 12, 18] : [12]) {
+      const ht = el('text', { x: X(d + hh * 36e5), y: H - 6, 'text-anchor': 'middle' }, svg); ht.textContent = pad(hh);
+    }
+  }
+  // regn
+  for (const s of st) {
+    if (s.t <= t0 || s.t > t1 || s.P < 0.05) continue;
+    const hgt = Math.min(1, s.P / 3) * (B - T) * 0.6 + 2;
+    el('rect', { x: (X(s.t - 36e5) + 0.5).toFixed(1), y: T, width: Math.max(1, pxH - 1).toFixed(1), height: hgt.toFixed(1), class: 'rainbar', rx: 1 }, svg);
+  }
+  // vand
+  const pts = st.filter(s => s.t >= t0 && s.t <= t1);
+  if (pts.length > 1) {
+    let d = `M${X(pts[0].t).toFixed(1)},${B} `;
+    for (const s of pts) d += `L${X(s.t).toFixed(1)},${Y(s.W).toFixed(1)} `;
+    d += `L${X(pts[pts.length - 1].t).toFixed(1)},${B} Z`;
+    el('path', { d, class: 'water', 'stroke-linejoin': 'round' }, svg);
+  }
+  // tørre vinduer
+  for (const b of inRange) if (b.mowable) el('rect', { x: X(b.start).toFixed(1), y: stripY, width: Math.max(1, X(b.end) - X(b.start) + 0.3).toFixed(1), height: 7, class: 'drywin' }, svg);
+  for (const b of inRange) if (b.status === 'frost' && !b.dark) el('rect', { x: X(b.start).toFixed(1), y: stripY, width: Math.max(1, X(b.end) - X(b.start) + 0.3).toFixed(1), height: 7, class: 'frostwin' }, svg);
+  // nu
+  if (now >= t0 && now <= t1) {
+    el('line', { x1: X(now), y1: T - 4, x2: X(now), y2: stripY + 7, class: 'nowline' }, svg);
+    const nl = el('text', { x: X(now) + 4, y: T + 9, class: 'nowlbl' }, svg); nl.textContent = 'nu';
+  }
+  const cursor = el('line', { x1: 0, y1: T - 4, x2: 0, y2: stripY + 7, class: 'cursor', visibility: 'hidden' }, svg);
+  const pick = ev => {
+    const r = svg.getBoundingClientRect();
+    const x = (ev.clientX - r.left) / r.width * W;
+    const t = t0 + (x - L) / (W - L - Rm) * (t1 - t0);
+    const b = inRange.find(q => q.start <= t && t < q.end);
+    if (!b) return;
+    cursor.setAttribute('x1', X(b.start + 18e5)); cursor.setAttribute('x2', X(b.start + 18e5)); cursor.setAttribute('visibility', 'visible');
+    selectBlock(b);
+  };
+  svg.onpointerdown = ev => { svg._down = true; pick(ev); };
+  svg.onpointermove = ev => { if (svg._down || ev.pointerType === 'mouse') pick(ev); };
+  svg.onpointerup = svg.onpointercancel = svg.onpointerleave = () => { svg._down = false; };
+  if (selected !== null) { const b = inRange.find(q => q.start === selected); if (b) { cursor.setAttribute('x1', X(b.start + 18e5)); cursor.setAttribute('x2', X(b.start + 18e5)); cursor.setAttribute('visibility', 'visible'); } }
+}
+function selectBlock(b) {
+  if (selected === b.start) return;
+  selected = b.start;
+  showDetail(b, model.now);
+  document.querySelectorAll('.cell.sel').forEach(x => x.classList.remove('sel'));
+  const c = document.querySelector(`.cell[data-t="${b.start}"]`); if (c) c.classList.add('sel');
+}
+if (window.ResizeObserver) { let lastW = 0; new ResizeObserver(es => { const w = Math.round(es[0].contentRect.width); if (w && w !== lastW) { lastW = w; drawChart(); } }).observe($('chartWrap')); }
 
 function renderDays(blocks, now, ci) {
   const wrap = $('days'); wrap.innerHTML = '';
@@ -286,10 +639,11 @@ function renderDays(blocks, now, ci) {
       const b = blocks[i];
       const c = document.createElement('button');
       c.type = 'button';
+      c.dataset.t = String(b.start);
       c.className = `cell st-${b.status}` + (b.dark ? ' dark' : '') + (b.end <= now ? ' past' : '') + (selected === b.start ? ' sel' : '');
       c.setAttribute('aria-label', `${hhmm(b.start)}: ${LABEL[b.status]}${b.dark ? ', mørkt' : ''}`);
       if (b.P > 0.05) { const r = document.createElement('span'); r.className = 'rain'; r.style.height = Math.min(100, 25 + b.P / 3 * 75) + '%'; c.append(r); }
-      c.addEventListener('click', () => { selected = b.start; showDetail(b, now); wrap.querySelectorAll('.sel').forEach(x => x.classList.remove('sel')); c.classList.add('sel'); });
+      c.addEventListener('click', () => { selectBlock(b); drawChart(); });
       strip.append(c);
     }
     if (k === todayKey) {
@@ -329,7 +683,7 @@ async function load() {
   $('banner').hidden = true;
   $('locName').textContent = loc.name;
   $('eyebrow').textContent = `Henter vejrudsigt for ${loc.name}…`;
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat.toFixed(2)}&longitude=${loc.lon.toFixed(2)}&hourly=${HOURLY}&wind_speed_unit=ms&timezone=auto&past_days=2&forecast_days=4`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat.toFixed(2)}&longitude=${loc.lon.toFixed(2)}&hourly=${HOURLY}&wind_speed_unit=ms&timezone=auto&past_days=7&forecast_days=4`;
   let j;
   try {
     const r = await fetch(url);

@@ -3,11 +3,12 @@
 @font-face{font-family:"Familjen Grotesk";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/familjen-grotesk-latin-700-normal.woff2") format("woff2")}
 @font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2")}
 @font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:500;font-display:swap;src:url("fonts/ibm-plex-mono-latin-500-normal.woff2") format("woff2")}
-/* Layout: én smal kolonne — dommen øverst, så fire døgns timestrimmel, så indstillinger og forklaring */
+/* Layout: én smal kolonne — illustreret dom øverst, så vindue, regn, klippehøjde, graf, timestrimler, indstillinger */
 :root{
   --bg:#edf1ec; --surface:#f8faf6; --ink:#16251c; --muted:#56675c; --line:#d2dbd3; --accent:#2d6a3d;
   --st-dry:#3d9650; --st-soft:#a8cc93; --st-damp:#d6a23a; --st-wet:#5288c4; --st-rain:#2a5796; --st-frost:#b5c2ea;
   --warn-bg:#fbf1dc; --warn-ink:#6b4a0c;
+  --night-band:rgba(30,52,80,.08); --water-fill:rgba(82,136,196,.22);
   --font-display:"Familjen Grotesk","Helvetica Neue",Arial,system-ui,sans-serif;
   --font-data:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   color-scheme:light;
@@ -17,6 +18,7 @@
     --bg:#0f1612; --surface:#17211b; --ink:#e2eae3; --muted:#94a499; --line:#2a372f; --accent:#7fc48e;
     --st-dry:#4fb565; --st-soft:#7d9f6c; --st-damp:#d9a646; --st-wet:#5f95d4; --st-rain:#3c6fbd; --st-frost:#a9b6e0;
     --warn-bg:#3a2e14; --warn-ink:#f1d9a2;
+    --night-band:rgba(150,180,220,.07); --water-fill:rgba(95,149,212,.28);
     color-scheme:dark;
   }
 }
@@ -24,9 +26,11 @@
   --bg:#0f1612; --surface:#17211b; --ink:#e2eae3; --muted:#94a499; --line:#2a372f; --accent:#7fc48e;
   --st-dry:#4fb565; --st-soft:#7d9f6c; --st-damp:#d9a646; --st-wet:#5f95d4; --st-rain:#3c6fbd; --st-frost:#a9b6e0;
   --warn-bg:#3a2e14; --warn-ink:#f1d9a2;
+    --night-band:rgba(150,180,220,.07); --water-fill:rgba(95,149,212,.28);
   color-scheme:dark;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--font-display)}
 .wrap{max-width:760px;margin:0 auto;padding-block:calc(env(safe-area-inset-top,0px) + 18px) calc(env(safe-area-inset-bottom,0px) + 48px);
@@ -56,21 +60,87 @@ button,input{font:inherit;color:inherit}
 .banner{background:var(--warn-bg);color:var(--warn-ink);border-radius:12px;padding:12px 14px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:.95rem}
 .banner p{margin:0;flex:1 1 240px}
 
-/* verdict */
-.verdict{display:flex;flex-direction:column;gap:10px}
-.eyebrow{font-size:.78rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0}
-.verdict h1{font-size:clamp(2rem,7.5vw,3.1rem);line-height:1.05;margin:0;font-weight:700;letter-spacing:-.015em;text-wrap:balance}
-.verdict h1 .dot{display:inline-block;width:.42em;height:.42em;border-radius:50%;margin-right:.28em;vertical-align:.12em;background:var(--st-dry)}
-.reason{margin:0;font-size:1.08rem;color:var(--muted);max-width:60ch;text-wrap:pretty}
-.film{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;margin-top:4px;font-size:.88rem;color:var(--muted)}
-.film-track{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
-.film-fill{height:100%;background:var(--st-wet);border-radius:4px;width:0;transition:width .4s ease}
+/* hero: illustreret himmel og græs; himlens farver følger tid på døgnet og vejret, ikke sidens tema */
+.hero{position:relative;overflow:hidden;border-radius:20px;isolation:isolate;
+  --sky-top:#8ec5ea;--sky-bot:#dcf0f7;--hero-ink:#10231a;--hero-muted:#33493d;--hero-track:rgba(16,35,26,.16)}
+.hero.phase-overcast{--sky-top:#a6b3bf;--sky-bot:#e0e6e9}
+.hero.phase-rain{--sky-top:#7c8e9e;--sky-bot:#c3cdd4}
+.hero.phase-frost{--sky-top:#b4cfea;--sky-bot:#eef4f8}
+.hero.phase-dusk{--sky-top:#5d6fa6;--sky-bot:#f0c39a;--hero-ink:#fbf7f2;--hero-muted:#f1e4d8;--hero-track:rgba(255,255,255,.28)}
+.hero.phase-night{--sky-top:#0d1a2e;--sky-bot:#2a3d58;--hero-ink:#eef3f8;--hero-muted:#c3cfdb;--hero-track:rgba(255,255,255,.22)}
+.scene .sky-top{stop-color:var(--sky-top)}
+.scene .sky-bot{stop-color:var(--sky-bot)}
+.scene{position:absolute;inset:0;width:100%;height:100%;z-index:-1;display:block}
+.hero-text{position:relative;display:flex;flex-direction:column;gap:10px;color:var(--hero-ink);
+  padding:22px 20px clamp(118px,30vw,150px)}
+.eyebrow{font-size:.78rem;text-transform:uppercase;letter-spacing:.09em;color:var(--hero-muted);margin:0}
+.hero h1{font-size:clamp(2rem,7.5vw,3.1rem);line-height:1.05;margin:0;font-weight:700;letter-spacing:-.015em;text-wrap:balance;max-width:16ch}
+.hero h1 .dot{display:inline-block;width:.42em;height:.42em;border-radius:50%;margin-right:.28em;vertical-align:.12em;background:var(--st-dry);box-shadow:0 0 0 3px rgba(255,255,255,.55)}
+.reason{margin:0;font-size:1.05rem;color:var(--hero-muted);max-width:44ch;text-wrap:pretty}
+.film{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;margin-top:2px;font-size:.86rem;color:var(--hero-muted);max-width:420px}
+.film-track{height:8px;border-radius:4px;background:var(--hero-track);overflow:hidden}
+.film-fill{height:100%;background:#3f7fc4;border-radius:4px;width:0;transition:width .5s ease}
+.phase-night .film-fill,.phase-dusk .film-fill{background:#9cc8f2}
+:root[data-theme="dark"] .hero{filter:brightness(.92)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .hero{filter:brightness(.92)}}
+.sway{transform-box:fill-box;transform-origin:50% 100%;animation:sway 7s ease-in-out infinite alternate}
+.sway.slow{animation-duration:9s;animation-delay:-3s}
+@keyframes sway{from{transform:skewX(-1.6deg)}to{transform:skewX(1.6deg)}}
+.raindrop{animation:fall .9s linear infinite}
+@keyframes fall{from{transform:translateY(-40px)}to{transform:translateY(250px)}}
+.twinkle{animation:twinkle 3.5s ease-in-out infinite alternate}
+@keyframes twinkle{from{opacity:.35}to{opacity:1}}
 
-.next{border-top:1px solid var(--line);padding-top:16px;display:grid;grid-template-columns:1fr auto;gap:2px 16px;align-items:baseline}
-.next .lbl{grid-column:1/-1;font-size:.78rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
-.next .when{font-size:1.5rem;font-weight:600;letter-spacing:-.01em}
-.next .meta{color:var(--muted);font-size:.92rem;text-align:right}
-@media (max-width:460px){.next{grid-template-columns:1fr}.next .meta{text-align:left}}
+/* kort under hero */
+.ico{width:22px;height:22px;color:var(--accent);flex:none}
+.lbl{font-size:.76rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
+.next{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px 18px}
+.next .ico{margin-top:2px}
+.next-body{display:flex;flex-direction:column;gap:2px;min-width:0}
+.next .when{font-size:1.45rem;font-weight:600;letter-spacing:-.01em;line-height:1.2}
+.next .meta{color:var(--muted);font-size:.92rem}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.fact{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto auto;column-gap:10px;row-gap:2px;align-items:center;
+  border:1px solid var(--line);border-radius:16px;padding:14px 16px;min-width:0}
+.fact .ico{grid-row:1;color:var(--st-wet)}
+.fact .lbl{grid-column:2}
+.fact .val{grid-column:1/-1;font-size:1.15rem;font-weight:600;line-height:1.25;margin-top:6px}
+.fact .sub{grid-column:1/-1;color:var(--muted);font-size:.86rem}
+.cut{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center;border:1px solid var(--line);border-radius:16px;padding:16px 18px;background:var(--surface)}
+.cut-text{display:flex;flex-direction:column;gap:4px;min-width:0}
+.cut-val{font-size:2.3rem;font-weight:700;letter-spacing:-.02em;line-height:1.05}
+.cut-val small{font-size:1rem;font-weight:500;color:var(--muted);letter-spacing:0;margin-left:4px}
+.cut-why{margin:6px 0 0;padding-left:1.1em;color:var(--ink);font-size:.92rem;display:flex;flex-direction:column;gap:4px}
+.cut-why li::marker{color:var(--accent)}
+.ruler{display:block;max-width:100%}
+.ruler text{font-family:var(--font-data);font-size:10px;fill:var(--muted)}
+.ruler .tick{stroke:var(--muted)}
+.ruler .cutline{stroke:var(--ink)}
+.ruler .cutlabel{fill:var(--ink);font-weight:500;font-size:11px}
+.ruler .blade{fill:var(--st-dry)}
+.ruler .blade-top{fill:var(--st-dry);opacity:.28}
+@media (max-width:440px){
+  .facts{grid-template-columns:1fr}
+  .cut{grid-template-columns:1fr auto;padding:14px}
+  .ruler{width:104px;height:143px}
+}
+
+/* graf */
+.chart-wrap{position:relative;min-width:0}
+.chart{display:block;width:100%;height:190px;touch-action:pan-y;cursor:crosshair}
+.chart text{font-family:var(--font-data);font-size:11px;fill:var(--muted)}
+.chart .daylbl{font-family:var(--font-display);font-size:12px;font-weight:600;fill:var(--ink)}
+.chart .night{fill:var(--night-band)}
+.chart .grid{stroke:var(--line)}
+.chart .water{fill:var(--water-fill);stroke:var(--st-wet);stroke-width:1.6}
+.chart .rainbar{fill:var(--st-rain);opacity:.8}
+.chart .drywin{fill:var(--st-dry)}
+.chart .frostwin{fill:var(--st-frost)}
+.chart .nowline{stroke:var(--ink);stroke-width:1.5}
+.chart .nowlbl{fill:var(--ink);font-weight:500}
+.chart .cursor{stroke:var(--ink);stroke-width:1;stroke-dasharray:3 3}
+.legend .sw-water{background:var(--water-fill);box-shadow:inset 0 2px 0 var(--st-wet)}
+.legend .sw-night{background:var(--night-band)}
 
 /* timeline */
 h2{font-size:1rem;margin:0;font-weight:600}
@@ -127,4 +197,4 @@ summary{cursor:pointer;font-weight:600}
 footer{font-size:.82rem;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
 footer a{color:inherit}
 .skeleton{color:var(--muted)}
-@media (prefers-reduced-motion: reduce){.film-fill{transition:none}}
+@media (prefers-reduced-motion: reduce){.film-fill{transition:none}.sway,.raindrop,.twinkle{animation:none}}

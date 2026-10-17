@@ -9,6 +9,8 @@ Hvornår er græsset tørt nok til at slå? Siden henter timeprognosen for dit s
 - Vejrdata fra [Open-Meteo](https://open-meteo.com/) (CC BY 4.0), de seneste to døgn og fire døgn frem.
 - Dug og fordampning beregnes med Penman–Monteith-ligningen for en våd overflade (FAO-56).
 - En time regnes som tør, når der er under 0,02 mm vand på stråene, ingen regn, ingen frost og dagslys.
+- Viser sidste og næste regn (vejrmodellens tal for de seneste syv døgn og prognosen).
+- Anbefaler klippehøjde efter årstid, temperatur, tørke og skygge, med 1/3-reglen.
 
 ## Privatliv og sikkerhed
 

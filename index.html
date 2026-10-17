@@ -41,23 +41,65 @@
     <button class="btn" id="retryBtn" type="button">Prøv igen</button>
   </div>
 
-  <section class="verdict" aria-live="polite">
-    <p class="eyebrow" id="eyebrow">Henter vejrudsigt…</p>
-    <h1 id="headline"><span class="skeleton">Regner på græsset…</span></h1>
-    <p class="reason" id="reason"></p>
-    <div class="film" id="film" hidden>
-      <span>Vand på stråene</span>
-      <div class="film-track"><div class="film-fill" id="filmFill"></div></div>
-      <span class="num" id="filmVal"></span>
+  <section class="hero phase-day" id="hero">
+    <svg class="scene" id="scene" viewBox="0 0 400 220" preserveAspectRatio="xMidYMax slice" aria-hidden="true"></svg>
+    <div class="hero-text" aria-live="polite">
+      <p class="eyebrow" id="eyebrow">Henter vejrudsigt…</p>
+      <h1 id="headline">Regner på græsset…</h1>
+      <p class="reason" id="reason"></p>
+      <div class="film" id="film" hidden>
+        <span>Vand på stråene</span>
+        <div class="film-track"><div class="film-fill" id="filmFill"></div></div>
+        <span class="num" id="filmVal"></span>
+      </div>
     </div>
-    <div class="next" id="next" hidden>
+  </section>
+
+  <section class="next" id="next" hidden>
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <div class="next-body">
       <span class="lbl" id="nextLbl">Næste tørre vindue</span>
       <span class="when" id="nextWhen"></span>
       <span class="meta" id="nextMeta"></span>
     </div>
   </section>
 
+  <section class="facts" id="facts" hidden>
+    <div class="fact">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c3 4.2 6 7.6 6 11a6 6 0 0 1-12 0c0-3.4 3-6.8 6-11z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+      <span class="lbl" id="lastRainLbl">Sidste regn</span>
+      <span class="val" id="lastRainVal"></span>
+      <span class="sub" id="lastRainSub"></span>
+    </div>
+    <div class="fact">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 15a4 4 0 0 1-.6-8A5.5 5.5 0 0 1 17 8a3.5 3.5 0 0 1 .5 7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 18l-1 2.5M13 18l-1 2.5M17 18l-1 2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span class="lbl">Næste regn</span>
+      <span class="val" id="nextRainVal"></span>
+      <span class="sub" id="nextRainSub"></span>
+    </div>
+  </section>
+
+  <section class="cut" id="cut" hidden>
+    <div class="cut-text">
+      <span class="lbl">Anbefalet klippehøjde · <span id="cutSeason"></span></span>
+      <span class="cut-val" id="cutVal"></span>
+      <ul class="cut-why" id="cutWhy"></ul>
+    </div>
+    <svg class="ruler" id="ruler" width="128" height="176" viewBox="0 0 128 176" aria-hidden="true"></svg>
+  </section>
+
   <section class="tl" id="tl" hidden>
+    <div class="tl-head">
+      <h2>Vand på græsset</h2>
+      <div class="legend">
+        <span><i class="sw-water"></i>Vand på stråene</span>
+        <span><i class="st-rain"></i>Regn</span>
+        <span><i class="st-dry"></i>Tørt vindue</span>
+        <span><i class="sw-night"></i>Nat</span>
+      </div>
+    </div>
+    <div class="chart-wrap" id="chartWrap"><svg class="chart" id="chart" role="img" aria-label="Graf over vand på græsset, regn og tørre vinduer de næste døgn"></svg></div>
+    <div class="detail" id="detail">Tryk på grafen eller en time for at se detaljer.</div>
     <div class="tl-head">
       <h2>Time for time</h2>
       <div class="legend">
@@ -72,7 +114,6 @@
     </div>
     <div class="axis" aria-hidden="true"><span></span><div><span>00</span><span>06</span><span>12</span><span>18</span></div></div>
     <div class="days" id="days"></div>
-    <div class="detail" id="detail">Tryk på en time for at se detaljer.</div>
   </section>
 
   <section class="settings">
@@ -115,6 +156,8 @@
         <li><b>Frost</b>: Græssets overfladetemperatur skønnes ud fra udstrålingen. Under 0 °C regnes græsset som frosset, og det skal ikke slås.</li>
         <li><b>Blød jord</b>: En simpel regnbalance over det seneste døgn. Står der mere end ca. 6 mm regn, der ikke er drænet eller fordampet, markeres jorden som blød.</li>
       </ul>
+      <p><b>Sidste regn</b> kommer fra vejrmodellens beregning for de seneste syv døgn, ikke fra en regnmåler i din have. Byger kan derfor ramme anderledes lokalt.</p>
+      <p><b>Klippehøjden</b> følger årstiden: højt de første gange om foråret, 4–5 cm i vækstsæsonen og ved sidste klipning i oktober, og højere i varme og tørke. I skygge lægges ca. 1 cm til. Er det koldt (under ca. 5 °C i gennemsnit), gror græsset næsten ikke, og så er der ikke brug for at slå det.</p>
       <p>En time tæller som <b>tør</b>, når der er under 0,02 mm vand på stråene hele timen, ingen regn, ingen frost og dagslys. Et vindue skal være mindst så langt som den tid, du har valgt.</p>
       <p>Prognosen gælder for et gitter på et par kilometer. Hække, træer og lavninger i haven giver lokale forskelle, så brug indstillingerne for sol og skygge og mærk efter med hånden de første gange.</p>
     </div>
