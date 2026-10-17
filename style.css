@@ -280,7 +280,10 @@ summary{cursor:pointer;font-family:var(--font-display);font-size:1.2rem}
 .b-cut{fill:none;stroke:var(--p-ink);stroke-width:.7;stroke-dasharray:3 2.2}
 .b-rulenum{font-family:var(--font-text);font-size:5px;fill:var(--p-ink);text-anchor:middle}
 .b-numL{font-family:var(--font-display);font-style:italic;font-size:9px;fill:var(--p-ink)}
-.scythe{transform-box:fill-box;transform-origin:82% 94%}
+.c-iron{fill:#76716a} .c-paint{fill:#557f57} .c-paintd{fill:#43644a}
+.b-gold{fill:none;stroke:#c9a24a;stroke-width:.7}
+.b-spoke{fill:none;stroke:#3f5f45;stroke-width:1.8;stroke-linecap:round}
+.wheelspin{transform-box:fill-box;transform-origin:50% 50%}
 .growgrass{transform-box:fill-box;transform-origin:50% 100%}
 .clip,.worm{transform-box:fill-box;transform-origin:50% 50%}
 .figsvg .frame{fill:none;stroke:var(--p-rule)}

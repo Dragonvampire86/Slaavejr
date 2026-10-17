@@ -826,9 +826,9 @@ function fleuron(svg, p) {
   el('circle', { r: 1.3, class: 'ring', 'stroke-width': .6 }, g);
 }
 const QUADS = [
-  { key: 'slaa', a0: 180, a1: 270, base: [142, 168], lab: ['Slå nu', 188, 262, 1] },
+  { key: 'slaa', a0: 180, a1: 270, base: [136, 152], flip: true, lab: ['Slå nu', 188, 262, 1] },
   { key: 'plan', a0: 270, a1: 360, base: [276, 172], lab: ['Klippeplan', 278, 352, 1] },
-  { key: 'vand', a0: 0, a1: 90, base: [246, 304], lab: ['Regn & vand', 82, 8, 0] },
+  { key: 'vand', a0: 0, a1: 90, base: [224, 298], lab: ['Regn & vand', 82, 8, 0] },
   { key: 'plaene', a0: 90, a1: 180, base: [118, 308], lab: ['Din plæne', 172, 98, 0] },
 ];
 let wheelSig = '';
@@ -846,8 +846,9 @@ function drawWheel(s) {
     const cp = el('clipPath', { id }, defs);
     el('path', { d: sectorPath(0, 160, q.a0 + 1.4, q.a1 - 1.4) }, cp);
     const g = el('g', { 'clip-path': `url(#${id})`, class: 'vig vig-' + q.key }, svg);
-    const inner = el('g', { transform: `translate(${q.base[0]} ${q.base[1]})` }, g);
-    if (q.key === 'slaa') Botany.scythe(inner, { season: s.season, wet: s.wet, frost: s.frost, rain: s.rain, height: 80, seed: 31 });
+    // klipperen spejles, så skaftet peger ind mod midten, og den kører ud mod kanten
+    const inner = el('g', { transform: `translate(${q.base[0]} ${q.base[1]})${q.flip ? ' scale(-1 1)' : ''}` }, g);
+    if (q.key === 'slaa') Botany.mower(inner, { season: s.season, wet: s.wet, frost: s.frost, rain: s.rain, height: 70, seed: 31 });
     if (q.key === 'plan') Botany.measure(inner, { season: s.season, kind: s.kind, height: 76, seed: 21, frost: s.frost });
     if (q.key === 'vand') Botany.wateringCan(inner, { season: s.season, height: 72, seed: 41, compact: true });
     if (q.key === 'plaene') Botany.soilProfile(inner, { season: s.season, soil: s.soil, kind: s.kind, root: s.root, height: 60, seed: 51 });
@@ -893,12 +894,12 @@ function drawFig(id, sig, fn) {
   figSig[id] = sig;
   const svg = $(id); svg.textContent = '';
   Botany.ensureDefs(svg);
-  const pos = { 'fig-vand': [96, 200], 'fig-plaene': [112, 204], 'fig-slaa': [170, 196] }[id] || [118, 184];
+  const pos = { 'fig-vand': [80, 200], 'fig-plaene': [112, 204], 'fig-slaa': [140, 200] }[id] || [118, 184];
   fn(el('g', { class: 'plantbox' }, el('g', { transform: `translate(${pos[0]} ${pos[1]})` }, svg)));
 }
 function drawFigures(s, cur) {
   const wetBucket = Math.round(s.wet * 4);
-  drawFig('fig-slaa', [s.season, wetBucket, s.frost, s.rain].join(), g => Botany.scythe(g, { season: s.season, wet: s.wet, frost: s.frost, rain: s.rain, detail: 'plate', height: 150, seed: 32 }));
+  drawFig('fig-slaa', [s.season, wetBucket, s.frost, s.rain].join(), g => Botany.mower(g, { season: s.season, wet: s.wet, frost: s.frost, rain: s.rain, detail: 'plate', height: 150, seed: 32 }));
   drawFig('fig-plan', [s.season, s.kind, s.frost].join(), g => Botany.measure(g, { season: s.season, kind: s.kind, detail: 'plate', height: 150, seed: 22, frost: s.frost }));
   drawFig('fig-vand', [s.season].join(), g => Botany.wateringCan(g, { season: s.season, detail: 'plate', height: 132, seed: 42 }));
   drawFig('fig-plaene', [s.season, s.soil, s.kind, s.root].join(), g => Botany.soilProfile(g, { season: s.season, soil: s.soil, kind: s.kind, root: s.root, detail: 'plate', height: 138, seed: 52 }));
@@ -987,9 +988,15 @@ function openFX(key, from, token) {
   const top = $('plate').getBoundingClientRect().top + window.scrollY - 10;
   if (window.scrollY > top && window.scrollTo) window.scrollTo({ top, behavior: 'smooth' });
   if (key === 'slaa') {
-    // leen svinger gennem græsset, duggen lægger sig, og grafen tegnes ind
-    const sc = svg.querySelector('.scythe');
-    if (sc) sc.animate([{ transform: 'rotate(-16deg)' }, { transform: 'rotate(4deg)', offset: .7 }, { transform: 'none' }], { duration: 1200, delay: 500, easing: 'cubic-bezier(.3,.6,.3,1)', fill: 'backwards' });
+    // klipperen ruller ind mod græsset med hjulene drejende, afklippet sprøjter fra knivene,
+    // duggen lægger sig, og grafen tegnes ind
+    const roll = { duration: 1300, delay: 420, easing: 'cubic-bezier(.25,.6,.3,1)', fill: 'backwards' };
+    const mw = svg.querySelector('.mower');
+    if (mw) mw.animate([{ transform: 'translateX(-52px)' }, { transform: 'none' }], roll);
+    svg.querySelectorAll('.wheelspin').forEach(w => w.animate([{ transform: 'rotate(-105deg)' }, { transform: 'none' }], roll));
+    svg.querySelectorAll('.clip').forEach((c, i) => c.animate([
+      { transform: 'translate(-16px,16px) scale(.3)', opacity: 0 }, { opacity: 1, offset: .25 }, { transform: 'none', opacity: 1 },
+    ], { duration: 650, delay: 1050 + i * 80, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'backwards' }));
     svg.querySelectorAll('.dew').forEach((d, i) => d.animate([
       { transform: 'translateY(-18px) scale(.6)', opacity: 0 }, { transform: 'translateY(1.5px) scale(1.05)', opacity: 1, offset: .7 }, { transform: 'none', opacity: 1 },
     ], { duration: 700, delay: 1200 + i * 110, easing: 'ease-out', fill: 'backwards' }));

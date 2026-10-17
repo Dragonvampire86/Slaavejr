@@ -15,7 +15,7 @@ Hvornår er græsset tørt nok til at slå, hvor ofte skal det slås, og skal de
 - Anbefalet klippehøjde efter årstid, temperatur, tørke og skygge.
 - Kan installeres som app og viser den seneste prognose uden net.
 - Forsiden er et hjul i fire felter (Slå nu, Klippeplan, Regn & vand, Din plæne); et tryk åbner feltet med en animation, der passer til indholdet.
-- Tegningerne er lavet i stil med de håndkolorerede kobberstik i Flora Danica og viser feltets emne: leen og græsset (dug, rim, regn), græsarten med tommestok og klippelinje, vandkanden, og et snit gennem plænen med den valgte jordbund. De skifter med årstiden og vejret.
+- Tegningerne er lavet i stil med de håndkolorerede kobberstik i Flora Danica og viser feltets emne: en gammeldags plæneklipper i græsset (dug, rim, regn), græsarten med tommestok og klippelinje, vandkanden, og et snit gennem plænen med den valgte jordbund. De skifter med årstiden og vejret.
 
 ## Privatliv og sikkerhed
 
