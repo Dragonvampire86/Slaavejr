@@ -6,7 +6,7 @@ Hvornår er græsset tørt nok til at slå, hvor ofte skal det slås, og skal de
 
 ## Sådan virker den
 
-- Vejrdata fra [Open-Meteo](https://open-meteo.com/) (CC BY 4.0): de seneste 30 døgn og 7 døgn frem.
+- Vejrdata fra DMI's HARMONIE-model (2 km, de første 2½ døgn) og ECMWF via [Open-Meteo](https://open-meteo.com/) (CC BY 4.0): de seneste 30 døgn og 7 døgn frem. Uden for DMI's område bruges Open-Meteos standardmodeller.
 - Dug og fordampning beregnes med Penman–Monteith-ligningen for en våd overflade (FAO-56).
 - En time regnes som tør, når der er under 0,02 mm vand på stråene, ingen regn, ingen frost og dagslys.
 - Viser sidste og næste regn.
@@ -14,7 +14,7 @@ Hvornår er græsset tørt nok til at slå, hvor ofte skal det slås, og skal de
 - Vandingsråd ud fra jordbund (sand, muld, ler), regn og fordampning.
 - Anbefalet klippehøjde efter årstid, temperatur, tørke og skygge.
 - Kan installeres som app og viser den seneste prognose uden net.
-- Forsiden er et hjul i fire felter (Slå nu, Klippeplan, Regn & vand, Din plæne); et tryk åbner feltet.
+- Forsiden er et hjul i fire felter (Slå nu, Klippeplan, Regn & vand, Din plæne); et tryk åbner feltet med en animation, der passer til indholdet.
 - Tegningerne er lavet i stil med de håndkolorerede kobberstik i Flora Danica: løvefod med dug, din græsart, hvidkløver og tusindfryd. De skifter med årstiden og vejret.
 
 ## Privatliv og sikkerhed

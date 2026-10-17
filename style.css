@@ -272,4 +272,8 @@ summary{cursor:pointer;font-family:var(--font-display);font-size:1.2rem}
 .b-num{font-family:var(--font-display);font-style:italic;font-size:4px;fill:var(--p-ink)}
 .figsvg .frame{fill:none;stroke:var(--p-rule)}
 .figsvg .tabno{font-family:var(--font-display);font-style:italic;font-size:10px;fill:var(--p-muted)}
+.plantbox,.vig{transform-box:fill-box;transform-origin:50% 100%}
+.bloom,.dew{transform-box:fill-box;transform-origin:50% 50%}
+.rainline{opacity:0}
+.fig{transform-origin:50% 50%}
 @media (prefers-reduced-motion: reduce){.fill{transition:none}.wheel-wrap{transition:none}.panel,.sec-head{animation:none}}

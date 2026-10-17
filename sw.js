@@ -1,7 +1,7 @@
 'use strict';
 // Gemmer sidens egne filer, så appen åbner uden net. Vejrdata gemmes af siden selv.
 // Hæv versionen ved hver ændring af filerne, så gamle kopier ryddes væk.
-const CACHE = 'slaavejr-v6';
+const CACHE = 'slaavejr-v7';
 const SHELL = [
   './', 'index.html', 'style.css', 'plants.js', 'app.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png',

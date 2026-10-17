@@ -243,6 +243,7 @@
       <details>
         <summary>Sådan regner Slåvejr</summary>
         <div class="explain">
+          <p><b>Vejrdata</b>: I Danmark og resten af Nordeuropa bruges DMI's HARMONIE-model med 2 km opløsning de første 2½ døgn, derefter ECMWF's globale model. Data hentes gennem Open-Meteo, der stiller modellerne til rådighed uden nøgle. Regnrisikoen kommer fra Open-Meteos ensembleberegning.</p>
           <p>Programmet henter timeprognosen for dit sted og de seneste 30 døgn. Ud fra den fører det regnskab med vandet på græsstråene, vandet i jorden og hvor meget græsset vokser, time for time.</p>
           <ul>
             <li><b>Regn</b> fylder græsset op til det, stråene kan holde: ca. 0,35 mm for kort græs, 0,5 mm for normalt og 0,8 mm for langt. Resten drypper ned i jorden.</li>
@@ -259,7 +260,7 @@
           <p><b>Som app</b>: Vælg <i>Føj til startskærm</i> eller <i>Installer</i> i browserens menu. Siden husker den seneste prognose og kan vise den uden net.</p>
         </div>
       </details>
-      <p class="credits">Vejrdata: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> (CC BY 4.0). <span id="updated"></span></p>
+      <p class="credits"><span id="sourceTxt">Vejrdata: </span><a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> (CC BY 4.0). <span id="updated"></span></p>
       <button class="btn" id="installBtn" type="button" hidden>Installer som app</button>
     </section>
   </div>

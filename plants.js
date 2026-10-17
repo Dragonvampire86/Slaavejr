@@ -94,6 +94,8 @@ const Botany = (() => {
       return;
     }
     // skygge på bladet, selve dråben, mørkere underkant, lysrefleks
+    const D = el('g', { class: 'dew' }, L.ink);
+    L = { wash: D, ink: D };
     el('ellipse', { cx: f(x + r * 0.3), cy: f(y + r * 0.55), rx: f(r * 0.95), ry: f(r * 0.42), class: 'c-dropshade' }, L.wash);
     el('circle', { cx: f(x), cy: f(y), r: f(r), class: 'c-water' }, L.ink);
     el('path', { d: `M${f(x - r * 0.92)},${f(y + r * 0.2)} A${f(r)},${f(r)} 0 0 0 ${f(x + r * 0.92)},${f(y + r * 0.2)} A${f(r * 1.25)},${f(r * 1.25)} 0 0 1 ${f(x - r * 0.92)},${f(y + r * 0.2)} Z`, class: 'c-dropin' }, L.ink);
@@ -353,7 +355,9 @@ const Botany = (() => {
     }
     return P;
   }
-  function cloverHead(L, x, y, r, state, R) {
+  function cloverHead(L0, x, y, r, state, R) {
+    const H0 = el('g', { class: 'bloom' }, L0.ink);
+    const L = { wash: H0, ink: H0 };
     // kuglerundt hoved af mange små ærteblomster; de nederste, ældste hænger ned og bliver brunlige
     el('circle', { cx: f(x), cy: f(y), r: f(r * 0.82), class: state === 'brown' ? 'c-ochre' : 'c-cloverbody' }, L.wash);
     const fl = [];
@@ -442,7 +446,9 @@ const Botany = (() => {
     for (let i = 13; i < N - 2; i += 3) { const c = C[i], r = Rt[i + 1]; ink(L, `M${f(c[0])},${f(c[1])} L${f(lerp(c[0], r[0], 0.7))},${f(lerp(c[1], r[1], 0.7))}`, 'b-hair'); const l = Lf[i + 1]; ink(L, `M${f(c[0])},${f(c[1])} L${f(lerp(c[0], l[0], 0.7))},${f(lerp(c[1], l[1], 0.7))}`, 'b-hair'); }
     for (let i = 12; i < N; i += 2) { const p = Lf[i]; ink(L, `M${f(p[0])},${f(p[1])} l${f(nrm[0] * 1.3)},${f(nrm[1] * 1.3 - 0.4)}`, 'b-hair'); }
   }
-  function bellisHead(L, x, y, r, tilt, rot, R) {
+  function bellisHead(L0, x, y, r, tilt, rot, R) {
+    const B = el('g', { class: 'bloom' }, L0.ink);
+    const L = { wash: L0.wash, ink: B };
     const n = 36, c = Math.cos(rot), s = Math.sin(rot);
     const T = (px, py) => [x + px * c - py * tilt * s, y + px * s + py * tilt * c];
     const rays = [];

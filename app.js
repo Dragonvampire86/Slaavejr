@@ -892,7 +892,7 @@ function drawFig(id, sig, fn) {
   figSig[id] = sig;
   const svg = $(id); svg.textContent = '';
   Botany.ensureDefs(svg);
-  fn(el('g', { transform: 'translate(118 184)' }, svg));
+  fn(el('g', { class: 'plantbox' }, el('g', { transform: 'translate(118 184)' }, svg)));
 }
 function drawFigures(s, cur) {
   const wetBucket = Math.round(s.wet * 4);
@@ -905,27 +905,161 @@ function drawFigures(s, cur) {
 }
 
 /* ---------- navigation mellem felterne ---------- */
+const QUAD_OF = { slaa: 'tl', plan: 'tr', vand: 'br', plaene: 'bl' };
+let animToken = 0, firstApply = true;
+const motionOK = () => typeof Element.prototype.animate === 'function' && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 function applyHash() {
   const key = location.hash.replace('#', '');
-  showSection(Object.hasOwn(SECTIONS, key) ? key : null);
+  showSection(Object.hasOwn(SECTIONS, key) ? key : null, firstApply);
+  firstApply = false;
 }
-function showSection(key) {
+function setState(key) {
   openSec = key;
   for (const p of document.querySelectorAll('.panel')) p.hidden = p.dataset.sec !== key;
   $('plate').classList.toggle('compact', !!key);
   $('secHead').hidden = !key;
   if (key) { $('secTitle').textContent = SECTIONS[key].title; $('secKicker').textContent = SECTIONS[key].kicker; }
   markActive();
-  if (key === 'slaa') requestAnimationFrame(() => drawChart());
+  if (key === 'slaa' && typeof requestAnimationFrame === 'function') requestAnimationFrame(() => drawChart());
+}
+function showSection(key, instant) {
+  const prev = openSec;
+  if (prev === key) return;
+  const token = ++animToken;
+  if (instant || !motionOK()) { setState(key); return; }
+  if (!prev && key) {
+    // åbning: planchen vokser ud af det felt, man trykkede på
+    const q = document.querySelector('.q-' + QUAD_OF[key]);
+    const from = q ? q.getBoundingClientRect() : null;
+    setState(key);
+    openFX(key, from, token);
+  } else if (prev && !key) {
+    closeFX(prev, token);
+  } else {
+    setState(key);
+    openFX(key, null, token);
+  }
+}
+function revealPanel(panel, delay) {
+  [...panel.children].forEach((c, i) => {
+    if (c.classList.contains('fig')) return;
+    c.animate([{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'none' }], { duration: 420, delay: delay + i * 70, easing: 'cubic-bezier(.2,.7,.2,1)', fill: 'backwards' });
+  });
+}
+// kobberstikket "trykkes": blækstreger tegnes, så kommer farven
+function inkDraw(svg, delay) {
+  let i = 0;
+  for (const p of svg.querySelectorAll('path.b-ink, path.b-fine, path.b-root')) {
+    p.setAttribute('pathLength', '1');
+    p.animate([{ strokeDasharray: '1 1', strokeDashoffset: 1 }, { strokeDasharray: '1 1', strokeDashoffset: 0 }],
+      { duration: 650 + (i % 7) * 70, delay: delay + (i % 60) * 8, easing: 'cubic-bezier(.45,.05,.3,1)', fill: 'backwards' });
+    i++;
+  }
+  for (const e of svg.querySelectorAll('.bw, .dew, .bloom, path.b-hair, circle, ellipse, text, rect, path[class^="c-"], path.b-pinktip, path.b-pinkline, path.b-glint, path.b-rime, path.b-rimeline, path.b-stolon')) {
+    if (e.closest('.bw') && !e.classList.contains('bw')) continue;
+    if (e.closest('.dew, .bloom') && !e.matches('.dew, .bloom')) continue;
+    e.animate([{ opacity: 0 }], { duration: 650, delay: delay + 480, easing: 'ease-out', fill: 'backwards' });
+  }
+}
+function fillFrom0(id, delay) {
+  const e = $(id); if (!e || !e.style.width) return;
+  e.animate([{ width: '0%' }, { width: e.style.width }], { duration: 1000, delay, easing: 'cubic-bezier(.3,.7,.2,1)', fill: 'backwards' });
+}
+function openFX(key, from, token) {
+  const panel = document.querySelector(`.panel[data-sec="${key}"]`);
+  const fig = panel.querySelector('.fig'), svg = fig.querySelector('svg');
+  const to = fig.getBoundingClientRect();
+  if (from && to.width) {
+    const s0 = Math.min(from.width / to.width, from.height / to.height);
+    const dx = (from.left + from.width / 2) - (to.left + to.width / 2), dy = (from.top + from.height / 2) - (to.top + to.height / 2);
+    fig.animate([
+      { transform: `translate(${dx}px, ${dy}px) scale(${s0})`, clipPath: 'circle(34% at 50% 50%)', opacity: .5 },
+      { transform: 'none', clipPath: 'circle(75% at 50% 50%)', opacity: 1 },
+    ], { duration: 620, easing: 'cubic-bezier(.2,.75,.15,1)' });
+  } else {
+    fig.animate([{ clipPath: 'circle(8% at 50% 60%)', opacity: .4 }, { clipPath: 'circle(75% at 50% 60%)', opacity: 1 }], { duration: 560, easing: 'cubic-bezier(.3,.7,.2,1)' });
+  }
+  inkDraw(svg, 260);
+  revealPanel(panel, 380);
+  const top = $('plate').getBoundingClientRect().top + window.scrollY - 10;
+  if (window.scrollY > top && window.scrollTo) window.scrollTo({ top, behavior: 'smooth' });
+  if (key === 'slaa') {
+    // duggen lægger sig på bladene, vandfilmen fyldes, og dagene tegnes ind time for time
+    svg.querySelectorAll('.dew').forEach((d, i) => d.animate([
+      { transform: 'translateY(-18px) scale(.6)', opacity: 0 }, { transform: 'translateY(1.5px) scale(1.05)', opacity: 1, offset: .7 }, { transform: 'none', opacity: 1 },
+    ], { duration: 700, delay: 1000 + i * 110, easing: 'ease-out', fill: 'backwards' }));
+    fillFrom0('filmFill', 700);
+    requestAnimationFrame(() => {
+      if (token !== animToken) return;
+      const ch = $('chart');
+      ch.animate([{ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0 0 0)' }], { duration: 1500, delay: 600, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'backwards' });
+      document.querySelectorAll('#days .day').forEach((r, i) => r.animate([{ opacity: 0, transform: 'translateX(-10px)' }, { opacity: 1, transform: 'none' }], { duration: 450, delay: 900 + i * 110, easing: 'ease-out', fill: 'backwards' }));
+    });
+  } else if (key === 'plan') {
+    // græsset vokser op fra roden, og linealen viser, hvor det skal slås
+    const pb = svg.querySelector('.plantbox');
+    if (pb) pb.animate([{ transform: 'scaleY(.42)' }, { transform: 'scaleY(1.03)', offset: .8 }, { transform: 'none' }], { duration: 1500, delay: 150, easing: 'cubic-bezier(.25,.8,.25,1)', fill: 'backwards' });
+    const top2 = document.querySelector('#ruler .blade-top');
+    if (top2) top2.animate([{ opacity: 1 }, { opacity: 1, offset: .55 }, { opacity: .3 }], { duration: 1600, delay: 900, easing: 'ease-in-out', fill: 'backwards' });
+    const cl = document.querySelector('#ruler .cutline');
+    if (cl) { cl.setAttribute('pathLength', '1'); cl.animate([{ strokeDashoffset: 1, strokeDasharray: '1 1' }, { strokeDashoffset: 0, strokeDasharray: '1 1' }], { duration: 700, delay: 1300, easing: 'ease-out', fill: 'backwards' }); }
+    fillFrom0('growFill', 900);
+  } else if (key === 'vand') {
+    // en kort byge over kløveren, og jordens vand stiger
+    shower(svg, token);
+    fillFrom0('soilFill', 1100);
+  } else if (key === 'plaene') {
+    // tusindfrydene springer ud
+    svg.querySelectorAll('.bloom').forEach((b, i) => b.animate([
+      { transform: 'scale(.12) rotate(-70deg)', opacity: 0 }, { transform: 'scale(1.08) rotate(6deg)', opacity: 1, offset: .75 }, { transform: 'none', opacity: 1 },
+    ], { duration: 950, delay: 950 + i * 170, easing: 'ease-out', fill: 'backwards' }));
+    panel.querySelectorAll('.field').forEach((f, i) => f.animate([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 380, delay: 500 + i * 60, easing: 'ease-out', fill: 'backwards' }));
+  }
+}
+function shower(svg, token) {
+  const g = el('g', { class: 'shower' }, svg);
+  const R = rng(Date.now() & 0xffff);
+  for (let i = 0; i < 46; i++) {
+    const x = 10 + R() * 300, y = -20 - R() * 40, len = 9 + R() * 7;
+    const d = el('path', { d: `M${f1(x)},${f1(y)} l-2.2,${f1(len)}`, class: 'b-fine rainline' }, g);
+    d.animate([{ transform: 'translateY(0)', opacity: 0 }, { opacity: .7, offset: .15 }, { transform: 'translateY(260px)', opacity: .5 }],
+      { duration: 650 + R() * 350, delay: 450 + R() * 1100, easing: 'cubic-bezier(.5,0,1,1)', fill: 'both' });
+  }
+  setTimeout(() => g.remove(), 2600);
+  void token;
+}
+function closeFX(prev, token) {
+  const panel = document.querySelector(`.panel[data-sec="${prev}"]`);
+  const a = panel.animate([{ opacity: 1, transform: 'none', clipPath: 'inset(0 0 0 0)' }, { opacity: 0, transform: 'translateY(-18px) scale(.98)', clipPath: 'inset(0 0 100% 0)' }],
+    { duration: 300, easing: 'cubic-bezier(.5,0,.75,0)', fill: 'forwards' });
+  let ran = false;
+  const done = () => {
+    if (ran) return; ran = true;
+    a.cancel();
+    if (token !== animToken) return;
+    setState(null);
+    // hjulet ruller tilbage på plads, og feltet man kom fra lyser kort op
+    $('wheelWrap').animate([{ transform: 'rotate(-30deg) scale(.9)' }, { transform: 'rotate(3deg)', offset: .75 }, { transform: 'none' }], { duration: 820, easing: 'cubic-bezier(.2,.8,.25,1)' });
+    const sec = document.querySelector('#wheel .sec-' + prev);
+    if (sec) sec.animate([{ opacity: .42 }, { opacity: 0 }], { duration: 1500, delay: 450, easing: 'ease-out', fill: 'backwards' });
+    const vig = document.querySelector('#wheel .vig-' + prev);
+    if (vig) vig.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.1)', offset: .4 }, { transform: 'scale(1)' }], { duration: 900, delay: 500, easing: 'ease-in-out' });
+    $('plateCaption').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 500, delay: 500, fill: 'backwards' });
+  };
+  a.onfinish = done;
+  setTimeout(() => { if (openSec === prev && token === animToken) done(); }, 450);
 }
 function goSection(key) {
   if (openSec === key) return;
+  if (key && motionOK()) {
+    // lille tryk-respons i feltet, før det åbner
+    const sec = document.querySelector('#wheel .sec-' + key);
+    if (sec) sec.animate([{ opacity: .35 }, { opacity: 0 }], { duration: 500, easing: 'ease-out' });
+  }
   if (key && openSec) location.replace('#' + key);          // skift mellem felter uden at fylde historikken
   else if (key) { pushedSec = true; location.hash = key; }
   else if (pushedSec) { pushedSec = false; history.back(); }
   else { history.replaceState(null, '', location.pathname + location.search); applyHash(); }
-  const top = $('plate').getBoundingClientRect().top + window.scrollY - 10;
-  if (window.scrollY > top) window.scrollTo({ top, behavior: 'smooth' });
 }
 document.querySelectorAll('.qbtn').forEach(b => b.addEventListener('click', () => goSection(b.dataset.sec)));
 $('backBtn').addEventListener('click', () => goSection(null));
@@ -939,23 +1073,49 @@ $('locBtn2').addEventListener('click', () => {
 applyHash();
 
 /* ---------- data ---------- */
-const HOURLY = 'temperature_2m,relative_humidity_2m,precipitation,precipitation_probability,wind_speed_10m,shortwave_radiation,cloud_cover,is_day,et0_fao_evapotranspiration';
+const HOURLY = 'temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,shortwave_radiation,cloud_cover,is_day,et0_fao_evapotranspiration';
 function validForecast(j) { return j && j.hourly && Array.isArray(j.hourly.time) && j.hourly.time.length > 48 && Number.isFinite(+j.utc_offset_seconds); }
+// DMI's HARMONIE-model (2 km, de første 2,5 døgn) dækker Nord- og Centraleuropa. Open-Meteo forlænger den med ECMWF.
+const inDMI = l => l.lat >= 44 && l.lat <= 72 && l.lon >= -30 && l.lon <= 42;
+async function getJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+async function fetchForecast(l) {
+  const base = `https://api.open-meteo.com/v1/forecast?latitude=${l.lat.toFixed(2)}&longitude=${l.lon.toFixed(2)}&wind_speed_unit=ms&timezone=auto`;
+  const main = `${base}&hourly=${HOURLY}&past_days=30&forecast_days=7`;
+  const probP = getJSON(`${base}&hourly=precipitation_probability&forecast_days=7`).catch(() => null);
+  let j = null, source = 'Open-Meteo';
+  if (inDMI(l)) {
+    try { j = await getJSON(main + '&models=dmi_seamless'); if (validForecast(j)) source = 'dmi'; else j = null; } catch (e) { j = null; }
+  }
+  if (!j) j = await getJSON(main);
+  if (!validForecast(j)) throw new Error('uventet svar fra vejrtjenesten');
+  // regnrisiko findes ikke i DMI-modellen; den hentes fra Open-Meteos ensemble og lægges på samme timer
+  const pj = await probP;
+  const pm = new Map();
+  if (pj && pj.hourly && Array.isArray(pj.hourly.time)) pj.hourly.time.forEach((t, i) => pm.set(t, pj.hourly.precipitation_probability[i]));
+  j.hourly.precipitation_probability = j.hourly.time.map(t => (pm.has(t) ? pm.get(t) : null));
+  j._source = source;
+  return j;
+}
+function showSource() {
+  $('sourceTxt').textContent = data && data._source === 'dmi'
+    ? "Vejrdata: DMI's HARMONIE-model via "
+    : 'Vejrdata: ';
+}
 async function load() {
   $('banner').hidden = true;
   $('locName').textContent = loc.name;
   $('plateCaption').textContent = `Henter vejrudsigt for ${loc.name}…`;
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat.toFixed(2)}&longitude=${loc.lon.toFixed(2)}&hourly=${HOURLY}&wind_speed_unit=ms&timezone=auto&past_days=30&forecast_days=7`;
   let j;
   try {
-    const r = await fetch(url);
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    j = await r.json();
-    if (!validForecast(j)) throw new Error('uventet svar fra vejrtjenesten');
+    j = await fetchForecast(loc);
   } catch (e) {
     const saved = store.get('forecast', null);
     if (saved && validForecast(saved.json) && saved.lat === loc.lat && saved.lon === loc.lon && Date.now() - saved.at < 3 * 864e5) {
-      data = saved.json; isSample = false; selected = null; staleFrom = saved.at;
+      data = saved.json; isSample = false; selected = null; staleFrom = saved.at; showSource();
       const age = new Date(saved.at + data.utc_offset_seconds * 1000);
       $('bannerText').textContent = `Ingen forbindelse til vejrtjenesten. Du ser den gemte prognose fra ${dayName(age.getTime(), nowLocal())} kl. ${hhmm(age.getTime())}.`;
       $('banner').hidden = false;
@@ -975,6 +1135,7 @@ async function load() {
   data = j; data._fetched = Date.now(); isSample = false; selected = null; staleFrom = null;
   store.set('forecast', { lat: loc.lat, lon: loc.lon, at: Date.now(), json: j });
   $('updated').textContent = `Prognose hentet ${hhmm(nowLocal())}.`;
+  showSource();
   run();
 }
 
