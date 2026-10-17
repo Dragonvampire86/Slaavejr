@@ -6,9 +6,9 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src https://api.open-meteo.com https://geocoding-api.open-meteo.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <title>Slåvejr</title>
-<meta name="description" content="Beregner ud fra vejrudsigten, hvornår græsset er tørt nok til at slå, hvor ofte det skal slås, og om det skal vandes.">
-<meta name="theme-color" content="#efede4" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#13170f" media="(prefers-color-scheme: dark)">
+<meta name="description" content="Hvornår er græsset tørt nok til at slå, hvor ofte skal det slås, og skal det vandes?">
+<meta name="theme-color" content="#e3dfd1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12160f" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -17,10 +17,10 @@
 <body>
 <div class="wrap">
   <header class="top">
-    <div class="brand">
+    <a class="brand" href="#" id="homeLink">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path class="brand-wash" d="M5 22c1-6 .5-11-1.5-16 3 4 4.5 9 4.5 16zM10 22c0-6 1.5-11 5-15-2 5-2.5 10-2 15zM15 22c.5-5 2.5-9 6-11-2.5 3-3.5 7-3.5 11z"/><path class="brand-ink" d="M5 22c1-6 .5-11-1.5-16 3 4 4.5 9 4.5 16M10 22c0-6 1.5-11 5-15-2 5-2.5 10-2 15M15 22c.5-5 2.5-9 6-11-2.5 3-3.5 7-3.5 11"/></svg>
       Slåvejr
-    </div>
+    </a>
     <button class="loc-btn" id="locBtn" aria-expanded="false" aria-controls="locPanel">
       <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s7-7.2 7-12a7 7 0 1 0-14 0c0 4.8 7 12 7 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="10" r="2.5" fill="currentColor"/></svg>
       <span id="locName">København</span>
@@ -44,200 +44,227 @@
     <button class="btn" id="retryBtn" type="button">Prøv igen</button>
   </div>
 
-  <section class="plate phase-day" id="hero">
+  <section class="plate" id="plate">
     <div class="plate-head">
-      <p class="eyebrow" id="eyebrow">Henter vejrudsigt…</p>
       <span class="tab" id="plateNo"></span>
     </div>
-    <div class="hero-text" aria-live="polite">
-      <h1 id="headline">Regner på græsset…</h1>
-      <p class="reason" id="reason"></p>
-      <div class="gauge" id="film" hidden>
-        <span>Vand på stråene</span>
-        <div class="track"><div class="fill water" id="filmFill"></div></div>
-        <span class="num" id="filmVal"></span>
+    <div class="plate-main">
+      <div class="wheel-wrap" id="wheelWrap">
+        <button class="qbtn q-tl" data-sec="slaa" type="button" aria-label="Slå nu: er græsset tørt?"></button>
+        <button class="qbtn q-tr" data-sec="plan" type="button" aria-label="Klippeplan: hvornår skal jeg slå?"></button>
+        <button class="qbtn q-br" data-sec="vand" type="button" aria-label="Regn og vand"></button>
+        <button class="qbtn q-bl" data-sec="plaene" type="button" aria-label="Din plæne: indstillinger"></button>
+        <button class="qbtn q-c" data-sec="slaa" type="button" aria-label="Status lige nu"></button>
+        <svg class="wheel" id="wheel" viewBox="0 0 400 400" role="img" aria-label="Hjul med fire felter: Slå nu, Klippeplan, Regn og vand, Din plæne"></svg>
+      </div>
+      <div class="sec-head" id="secHead" hidden>
+        <span class="lbl" id="secKicker"></span>
+        <h1 class="sec-title" id="secTitle"></h1>
+        <button class="btn quiet back" id="backBtn" type="button">← Tilbage til hjulet</button>
       </div>
     </div>
-    <svg class="scene" id="scene" viewBox="0 0 400 210" preserveAspectRatio="xMidYMax slice" aria-hidden="true"></svg>
-    <p class="caption"><i id="capLatin">Gramineae</i><span id="capDanish">Græsplæne</span></p>
+    <p class="plate-caption" id="plateCaption">Henter vejrudsigt…</p>
   </section>
+  <p class="hint-line" id="hintLine">Tryk på et felt for at åbne det</p>
 
-  <section class="card next" id="next" hidden>
-    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-    <div class="card-body">
-      <span class="lbl" id="nextLbl">Næste tørre vindue</span>
-      <span class="big" id="nextWhen"></span>
-      <span class="sub" id="nextMeta"></span>
-    </div>
-  </section>
+  <div class="panels" id="panels">
 
-  <section class="card plan" id="plan" hidden>
-    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20c.5-4 0-8-2-12M9 20c0-5 1-9 4-12M13 20c.3-4 2-7 5-9"/><path d="M2 21h20"/></svg>
-    <div class="card-body">
-      <span class="lbl">Klippeplan</span>
-      <span class="big" id="planBig"></span>
-      <span class="sub" id="planSub"></span>
-      <div class="gauge growth" id="growGauge" hidden>
-        <span class="num" id="growFrom"></span>
-        <div class="track"><div class="fill grow" id="growFill"></div></div>
-        <span class="num" id="growTo"></span>
+    <section class="panel" id="p-slaa" data-sec="slaa" hidden>
+      <figure class="fig"><svg class="figsvg" id="fig-slaa" viewBox="0 0 320 236" aria-hidden="true"></svg>
+        <figcaption><i>Alchemilla vulgaris L.</i><span id="fignote-slaa">Løvefod</span></figcaption></figure>
+      <div class="verdict" aria-live="polite">
+        <h2 class="headline" id="headline">Regner på græsset…</h2>
+        <p class="reason" id="reason"></p>
+        <div class="gauge" id="film" hidden>
+          <span>Vand på stråene</span>
+          <div class="track"><div class="fill water" id="filmFill"></div></div>
+          <span class="num" id="filmVal"></span>
+        </div>
       </div>
-      <span class="sub" id="planLog"></span>
-      <div class="actions">
-        <button class="btn primary" id="mowToday" type="button">Jeg har slået græs i dag</button>
-        <button class="btn" id="mowYesterday" type="button">Det var i går</button>
-        <button class="btn quiet" id="mowUndo" type="button" hidden>Fortryd</button>
+      <div class="card next" id="next" hidden>
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        <div class="card-body">
+          <span class="lbl" id="nextLbl">Næste tørre vindue</span>
+          <span class="big" id="nextWhen"></span>
+          <span class="sub" id="nextMeta"></span>
+        </div>
       </div>
-    </div>
-  </section>
+      <div class="tl" id="tl" hidden>
+        <div class="tl-head">
+          <h3>Vand på græsset</h3>
+          <div class="legend">
+            <span><i class="sw-water"></i>Vand på stråene</span>
+            <span><i class="st-rain"></i>Regn</span>
+            <span><i class="st-dry"></i>Tørt vindue</span>
+            <span><i class="sw-night"></i>Nat</span>
+          </div>
+        </div>
+        <div class="chart-wrap" id="chartWrap"><svg class="chart" id="chart" role="img" aria-label="Graf over vand på græsset, regn og tørre vinduer de næste døgn"></svg></div>
+        <div class="detail" id="detail">Tryk på grafen eller en time for at se detaljer.</div>
+        <div class="tl-head">
+          <h3>Time for time</h3>
+          <div class="legend">
+            <span><i class="st-dry"></i>Tørt</span>
+            <span><i class="st-soft"></i>Blød jord</span>
+            <span><i class="st-damp"></i>Fugtigt</span>
+            <span><i class="st-wet"></i>Vådt</span>
+            <span><i class="st-rain"></i>Regn</span>
+            <span><i class="st-frost"></i>Frost</span>
+            <span><i class="st-dry dim"></i>Mørkt</span>
+          </div>
+        </div>
+        <div class="axis" aria-hidden="true"><span></span><div><span>00</span><span>06</span><span>12</span><span>18</span></div></div>
+        <div class="days" id="days"></div>
+      </div>
+    </section>
 
-  <section class="facts" id="facts" hidden>
-    <div class="card fact">
-      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c3 4.2 6 7.6 6 11a6 6 0 0 1-12 0c0-3.4 3-6.8 6-11z"/></svg>
-      <span class="lbl" id="lastRainLbl">Sidste regn</span>
-      <span class="val" id="lastRainVal"></span>
-      <span class="sub" id="lastRainSub"></span>
-    </div>
-    <div class="card fact">
-      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 15a4 4 0 0 1-.6-8A5.5 5.5 0 0 1 17 8a3.5 3.5 0 0 1 .5 7z"/><path d="M9 18l-1 2.5M13 18l-1 2.5M17 18l-1 2.5"/></svg>
-      <span class="lbl">Næste regn</span>
-      <span class="val" id="nextRainVal"></span>
-      <span class="sub" id="nextRainSub"></span>
-    </div>
-  </section>
+    <section class="panel" id="p-plan" data-sec="plan" hidden>
+      <figure class="fig"><svg class="figsvg" id="fig-plan" viewBox="0 0 320 236" aria-hidden="true"></svg>
+        <figcaption><i id="capLatin">Gramineae</i><span id="capDanish">Græsplæne</span></figcaption></figure>
+      <div class="card plan" id="plan" hidden>
+        <div class="card-body">
+          <span class="lbl">Næste klipning</span>
+          <span class="big" id="planBig"></span>
+          <span class="sub" id="planSub"></span>
+          <div class="gauge growth" id="growGauge" hidden>
+            <span class="num" id="growFrom"></span>
+            <div class="track"><div class="fill grow" id="growFill"></div></div>
+            <span class="num" id="growTo"></span>
+          </div>
+          <span class="sub" id="planLog"></span>
+          <div class="actions">
+            <button class="btn primary" id="mowToday" type="button">Jeg har slået græs i dag</button>
+            <button class="btn" id="mowYesterday" type="button">Det var i går</button>
+            <button class="btn quiet" id="mowUndo" type="button" hidden>Fortryd</button>
+          </div>
+        </div>
+      </div>
+      <div class="card cut" id="cut" hidden>
+        <div class="cut-text">
+          <span class="lbl">Klippehøjde · <span id="cutSeason"></span></span>
+          <span class="cut-val" id="cutVal"></span>
+          <ul class="cut-why" id="cutWhy"></ul>
+        </div>
+        <svg class="ruler" id="ruler" width="128" height="176" viewBox="0 0 128 176" aria-hidden="true"></svg>
+      </div>
+    </section>
 
-  <section class="card water-card" id="water" hidden>
-    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h9a3 3 0 0 1 3 3v1"/><path d="M4 10h7l3-3h3v6"/><path d="M16 20.5c0-1 1-2.3 1.5-3 .5.7 1.5 2 1.5 3a1.5 1.5 0 0 1-3 0z"/></svg>
-    <div class="card-body">
-      <span class="lbl">Vanding</span>
-      <span class="big" id="waterBig"></span>
-      <span class="sub" id="waterSub"></span>
-      <div class="gauge soil">
-        <span>Vand i jorden</span>
-        <div class="track"><div class="fill soilw" id="soilFill"></div></div>
-        <span class="num" id="soilVal"></span>
+    <section class="panel" id="p-vand" data-sec="vand" hidden>
+      <figure class="fig"><svg class="figsvg" id="fig-vand" viewBox="0 0 320 236" aria-hidden="true"></svg>
+        <figcaption><i>Trifolium repens L.</i><span>Hvidkløver</span></figcaption></figure>
+      <div class="facts" id="facts" hidden>
+        <div class="card fact">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c3 4.2 6 7.6 6 11a6 6 0 0 1-12 0c0-3.4 3-6.8 6-11z"/></svg>
+          <span class="lbl" id="lastRainLbl">Sidste regn</span>
+          <span class="val" id="lastRainVal"></span>
+          <span class="sub" id="lastRainSub"></span>
+        </div>
+        <div class="card fact">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 15a4 4 0 0 1-.6-8A5.5 5.5 0 0 1 17 8a3.5 3.5 0 0 1 .5 7z"/><path d="M9 18l-1 2.5M13 18l-1 2.5M17 18l-1 2.5"/></svg>
+          <span class="lbl">Næste regn</span>
+          <span class="val" id="nextRainVal"></span>
+          <span class="sub" id="nextRainSub"></span>
+        </div>
       </div>
-    </div>
-  </section>
+      <div class="card water-card" id="water" hidden>
+        <div class="card-body">
+          <span class="lbl">Vanding</span>
+          <span class="big" id="waterBig"></span>
+          <span class="sub" id="waterSub"></span>
+          <div class="gauge soil">
+            <span>Vand i jorden</span>
+            <div class="track"><div class="fill soilw" id="soilFill"></div></div>
+            <span class="num" id="soilVal"></span>
+          </div>
+        </div>
+      </div>
+    </section>
 
-  <section class="card cut" id="cut" hidden>
-    <div class="cut-text">
-      <span class="lbl">Klippehøjde · <span id="cutSeason"></span></span>
-      <span class="cut-val" id="cutVal"></span>
-      <ul class="cut-why" id="cutWhy"></ul>
-    </div>
-    <svg class="ruler" id="ruler" width="128" height="176" viewBox="0 0 128 176" aria-hidden="true"></svg>
-  </section>
-
-  <section class="tl" id="tl" hidden>
-    <div class="tl-head">
-      <h2>Vand på græsset</h2>
-      <div class="legend">
-        <span><i class="sw-water"></i>Vand på stråene</span>
-        <span><i class="st-rain"></i>Regn</span>
-        <span><i class="st-dry"></i>Tørt vindue</span>
-        <span><i class="sw-night"></i>Nat</span>
+    <section class="panel" id="p-plaene" data-sec="plaene" hidden>
+      <figure class="fig"><svg class="figsvg" id="fig-plaene" viewBox="0 0 320 236" aria-hidden="true"></svg>
+        <figcaption><i>Bellis perennis L.</i><span>Tusindfryd</span></figcaption></figure>
+      <div class="settings">
+        <div class="field">
+          <span class="legend-like">Sted</span>
+          <div class="loc-line"><span id="locLine">København</span><button class="btn" id="locBtn2" type="button">Skift sted</button></div>
+        </div>
+        <fieldset class="field">
+          <legend>Græstype</legend>
+          <div class="seg">
+            <input type="radio" name="type" id="type-rye" value="rye"><label for="type-rye">Brugsplæne (rajgræs)</label>
+            <input type="radio" name="type" id="type-poa" value="poa"><label for="type-poa">Engrapgræs</label>
+            <input type="radio" name="type" id="type-fescue" value="fescue"><label for="type-fescue">Fin plæne (rødsvingel)</label>
+            <input type="radio" name="type" id="type-tall" value="tall"><label for="type-tall">Tørkeplæne (strandsvingel)</label>
+            <input type="radio" name="type" id="type-mix" value="mix"><label for="type-mix">Blandet / ved ikke</label>
+          </div>
+        </fieldset>
+        <fieldset class="field">
+          <legend>Jordbund</legend>
+          <div class="seg">
+            <input type="radio" name="soil" id="soil-sand" value="sand"><label for="soil-sand">Sandet</label>
+            <input type="radio" name="soil" id="soil-loam" value="loam"><label for="soil-loam">Muldjord / ved ikke</label>
+            <input type="radio" name="soil" id="soil-clay" value="clay"><label for="soil-clay">Lerjord</label>
+          </div>
+        </fieldset>
+        <fieldset class="field">
+          <legend>Gødning</legend>
+          <div class="seg">
+            <input type="radio" name="fert" id="fert-high" value="high"><label for="fert-high">Gødes jævnligt</label>
+            <input type="radio" name="fert" id="fert-some" value="some"><label for="fert-some">Lidt</label>
+            <input type="radio" name="fert" id="fert-none" value="none"><label for="fert-none">Aldrig</label>
+          </div>
+        </fieldset>
+        <fieldset class="field">
+          <legend>Sol på plænen</legend>
+          <div class="seg">
+            <input type="radio" name="site" id="site-sun" value="sun"><label for="site-sun">Sol det meste af dagen</label>
+            <input type="radio" name="site" id="site-half" value="half"><label for="site-half">Halvskygge</label>
+            <input type="radio" name="site" id="site-shade" value="shade"><label for="site-shade">Skygge</label>
+          </div>
+        </fieldset>
+        <fieldset class="field">
+          <legend>Græslængde nu</legend>
+          <div class="seg">
+            <input type="radio" name="grass" id="grass-short" value="short"><label for="grass-short">Kort (under 5 cm)</label>
+            <input type="radio" name="grass" id="grass-normal" value="normal"><label for="grass-normal">Normal</label>
+            <input type="radio" name="grass" id="grass-long" value="long"><label for="grass-long">Lang (over 10 cm)</label>
+          </div>
+        </fieldset>
+        <fieldset class="field">
+          <legend>Tid til at slå græsset</legend>
+          <div class="seg">
+            <input type="radio" name="dur" id="dur-30" value="30"><label for="dur-30">30 min</label>
+            <input type="radio" name="dur" id="dur-60" value="60"><label for="dur-60">1 time</label>
+            <input type="radio" name="dur" id="dur-90" value="90"><label for="dur-90">1½ time</label>
+            <input type="radio" name="dur" id="dur-120" value="120"><label for="dur-120">2 timer</label>
+          </div>
+        </fieldset>
       </div>
-    </div>
-    <div class="chart-wrap" id="chartWrap"><svg class="chart" id="chart" role="img" aria-label="Graf over vand på græsset, regn og tørre vinduer de næste døgn"></svg></div>
-    <div class="detail" id="detail">Tryk på grafen eller en time for at se detaljer.</div>
-    <div class="tl-head">
-      <h2>Time for time</h2>
-      <div class="legend">
-        <span><i class="st-dry"></i>Tørt</span>
-        <span><i class="st-soft"></i>Tørt, blød jord</span>
-        <span><i class="st-damp"></i>Fugtigt</span>
-        <span><i class="st-wet"></i>Vådt</span>
-        <span><i class="st-rain"></i>Regn</span>
-        <span><i class="st-frost"></i>Frost</span>
-        <span><i class="st-dry dim"></i>Mørkt</span>
-      </div>
-    </div>
-    <div class="axis" aria-hidden="true"><span></span><div><span>00</span><span>06</span><span>12</span><span>18</span></div></div>
-    <div class="days" id="days"></div>
-  </section>
-
-  <section class="settings">
-    <h2>Din plæne</h2>
-    <fieldset class="field">
-      <legend>Græstype</legend>
-      <div class="seg">
-        <input type="radio" name="type" id="type-rye" value="rye"><label for="type-rye">Brugsplæne (rajgræs)</label>
-        <input type="radio" name="type" id="type-poa" value="poa"><label for="type-poa">Engrapgræs</label>
-        <input type="radio" name="type" id="type-fescue" value="fescue"><label for="type-fescue">Fin plæne (rødsvingel)</label>
-        <input type="radio" name="type" id="type-tall" value="tall"><label for="type-tall">Tørkeplæne (strandsvingel)</label>
-        <input type="radio" name="type" id="type-mix" value="mix"><label for="type-mix">Blandet / ved ikke</label>
-      </div>
-    </fieldset>
-    <fieldset class="field">
-      <legend>Jordbund</legend>
-      <div class="seg">
-        <input type="radio" name="soil" id="soil-sand" value="sand"><label for="soil-sand">Sandet</label>
-        <input type="radio" name="soil" id="soil-loam" value="loam"><label for="soil-loam">Muldjord / ved ikke</label>
-        <input type="radio" name="soil" id="soil-clay" value="clay"><label for="soil-clay">Lerjord</label>
-      </div>
-    </fieldset>
-    <fieldset class="field">
-      <legend>Gødning</legend>
-      <div class="seg">
-        <input type="radio" name="fert" id="fert-high" value="high"><label for="fert-high">Gødes jævnligt</label>
-        <input type="radio" name="fert" id="fert-some" value="some"><label for="fert-some">Lidt</label>
-        <input type="radio" name="fert" id="fert-none" value="none"><label for="fert-none">Aldrig</label>
-      </div>
-    </fieldset>
-    <fieldset class="field">
-      <legend>Sol på plænen</legend>
-      <div class="seg">
-        <input type="radio" name="site" id="site-sun" value="sun"><label for="site-sun">Sol det meste af dagen</label>
-        <input type="radio" name="site" id="site-half" value="half"><label for="site-half">Halvskygge</label>
-        <input type="radio" name="site" id="site-shade" value="shade"><label for="site-shade">Skygge</label>
-      </div>
-    </fieldset>
-    <fieldset class="field">
-      <legend>Græslængde nu</legend>
-      <div class="seg">
-        <input type="radio" name="grass" id="grass-short" value="short"><label for="grass-short">Kort (under 5 cm)</label>
-        <input type="radio" name="grass" id="grass-normal" value="normal"><label for="grass-normal">Normal</label>
-        <input type="radio" name="grass" id="grass-long" value="long"><label for="grass-long">Lang (over 10 cm)</label>
-      </div>
-    </fieldset>
-    <fieldset class="field">
-      <legend>Tid til at slå græsset</legend>
-      <div class="seg">
-        <input type="radio" name="dur" id="dur-30" value="30"><label for="dur-30">30 min</label>
-        <input type="radio" name="dur" id="dur-60" value="60"><label for="dur-60">1 time</label>
-        <input type="radio" name="dur" id="dur-90" value="90"><label for="dur-90">1½ time</label>
-        <input type="radio" name="dur" id="dur-120" value="120"><label for="dur-120">2 timer</label>
-      </div>
-    </fieldset>
-  </section>
-
-  <details>
-    <summary>Sådan regner Slåvejr</summary>
-    <div class="explain">
-      <p>Programmet henter timeprognosen for din position og de seneste 30 døgn. Ud fra den fører det regnskab med vandet på græsstråene, vandet i jorden og hvor meget græsset vokser, time for time.</p>
-      <ul>
-        <li><b>Regn</b> fylder græsset op til det, stråene kan holde: ca. 0,35 mm for kort græs, 0,5 mm for normalt og 0,8 mm for langt. Resten drypper ned i jorden.</li>
-        <li><b>Dug</b>: Om natten udstråler græsset varme mod himlen. Når overfladen bliver koldere end luftens dugpunkt, kondenserer vand på stråene. Skyer og vind bremser det.</li>
-        <li><b>Fordampning</b>: Om dagen tørrer sol, vind og tør luft græsset. Både dug og fordampning beregnes med Penman–Monteith-ligningen for en våd overflade (FAO-56).</li>
-        <li><b>Frost</b>: Græssets overfladetemperatur skønnes ud fra udstrålingen. Under 0 °C regnes græsset som frosset, og det skal ikke slås.</li>
-        <li><b>Blød jord</b>: En regnbalance, der dræner hurtigt i sandet jord og langsomt i lerjord.</li>
-      </ul>
-      <p>En time tæller som <b>tør</b>, når der er under 0,02 mm vand på stråene hele timen, ingen regn, ingen frost og dagslys. Et vindue skal være mindst så langt som den tid, du har valgt.</p>
-      <p><b>Vækst og klippeplan</b>: Græsset vokser mest ved 14–22 °C og næsten ikke under 3–4 °C. Væksten skaleres med lys, vand i jorden, græstype og gødning. Rajgræs vokser hurtigst, rødsvingel langsomst. Efter 1/3-reglen skal græsset slås, når det er blevet halvanden gang så højt som klippehøjden. Trykker du på "Jeg har slået græs i dag", regner siden ud, hvornår det sker, og foreslår et tørt vindue omkring det tidspunkt.</p>
-      <p><b>Vanding</b>: Jorden holder ca. 35 mm vand, som rødderne kan nå, i sandet jord, 70 mm i muldjord og 90 mm i lerjord. Strandsvingel og rødsvingel har dybere rødder og klarer sig længere. Når jorden er under ca. 45 % og der ikke kommer regn, foreslås 10–25 mm. 1 mm svarer til 1 liter pr. m². Vand tidligt om morgenen, så græsset tørrer i løbet af dagen.</p>
-      <p><b>Sidste regn</b> og vandet i jorden kommer fra vejrmodellens beregning, ikke fra en regnmåler i din have. Byger kan derfor ramme anderledes lokalt.</p>
-      <p><b>Klippehøjden</b> følger årstiden: højt de første gange om foråret, 4–5 cm i vækstsæsonen og ved sidste klipning i oktober, og højere i varme og tørke. I skygge lægges ca. 1 cm til.</p>
-      <p>Prognosen gælder for et gitter på et par kilometer. Hække, træer og lavninger i haven giver lokale forskelle, så brug indstillingerne og mærk efter med hånden de første gange.</p>
-      <p><b>Som app</b>: Åbn menuen i browseren, og vælg <i>Føj til startskærm</i> eller <i>Installer</i>. Siden husker den seneste prognose og kan vise den uden net.</p>
-    </div>
-  </details>
-
-  <footer>
-    <span>Vejrdata: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> (CC BY 4.0). <span id="updated"></span></span>
-    <button class="btn quiet" id="installBtn" type="button" hidden>Installer som app</button>
-  </footer>
+      <details>
+        <summary>Sådan regner Slåvejr</summary>
+        <div class="explain">
+          <p>Programmet henter timeprognosen for dit sted og de seneste 30 døgn. Ud fra den fører det regnskab med vandet på græsstråene, vandet i jorden og hvor meget græsset vokser, time for time.</p>
+          <ul>
+            <li><b>Regn</b> fylder græsset op til det, stråene kan holde: ca. 0,35 mm for kort græs, 0,5 mm for normalt og 0,8 mm for langt. Resten drypper ned i jorden.</li>
+            <li><b>Dug</b>: Om natten udstråler græsset varme mod himlen. Når overfladen bliver koldere end luftens dugpunkt, kondenserer vand på stråene. Skyer og vind bremser det.</li>
+            <li><b>Fordampning</b>: Om dagen tørrer sol, vind og tør luft græsset. Både dug og fordampning beregnes med Penman–Monteith-ligningen for en våd overflade (FAO-56).</li>
+            <li><b>Frost</b>: Græssets overfladetemperatur skønnes ud fra udstrålingen. Under 0 °C regnes græsset som frosset, og det skal ikke slås.</li>
+            <li><b>Blød jord</b>: En regnbalance, der dræner hurtigt i sandet jord og langsomt i lerjord.</li>
+          </ul>
+          <p>En time tæller som <b>tør</b>, når der er under 0,02 mm vand på stråene hele timen, ingen regn, ingen frost og dagslys. Et vindue skal være mindst så langt som den tid, du har valgt.</p>
+          <p><b>Vækst og klippeplan</b>: Græsset vokser mest ved 14–22 °C og næsten ikke under 3–4 °C. Væksten skaleres med lys, vand i jorden, græstype og gødning. Efter 1/3-reglen skal græsset slås, når det er blevet halvanden gang så højt som klippehøjden.</p>
+          <p><b>Vanding</b>: Jorden holder ca. 35 mm vand, som rødderne kan nå, i sandet jord, 70 mm i muldjord og 90 mm i lerjord. Når jorden er under ca. 45 % og der ikke kommer regn, foreslås 10–25 mm. 1 mm svarer til 1 liter pr. m².</p>
+          <p><b>Sidste regn</b> og vandet i jorden kommer fra vejrmodellens beregning, ikke fra en regnmåler i din have. Byger kan ramme anderledes lokalt.</p>
+          <p><b>Tegningerne</b> er lavet i stil med de håndkolorerede kobberstik i Flora Danica: løvefod, der samler dug, din græsart, hvidkløver og tusindfryd. De skifter med årstiden og vejret.</p>
+          <p><b>Som app</b>: Vælg <i>Føj til startskærm</i> eller <i>Installer</i> i browserens menu. Siden husker den seneste prognose og kan vise den uden net.</p>
+        </div>
+      </details>
+      <p class="credits">Vejrdata: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> (CC BY 4.0). <span id="updated"></span></p>
+      <button class="btn" id="installBtn" type="button" hidden>Installer som app</button>
+    </section>
+  </div>
 </div>
+<script src="plants.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

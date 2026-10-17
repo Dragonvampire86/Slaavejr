@@ -12,16 +12,16 @@ const GRASS = {                     // græslængde nu
   long:   { cap: 0.80, dry: 0.75 },
 };
 const GRASS_TYPES = {               // peak = vækst i mm/døgn under gode forhold; root = rodzonens dybde relativt
-  rye:    { name: 'Almindelig rajgræs', latin: 'Lolium perenne L.', peak: 4.5, root: 0.9, head: 'spike' },
-  poa:    { name: 'Eng-rapgræs', latin: 'Poa pratensis L.', peak: 3.5, root: 1.0, head: 'panicle' },
-  fescue: { name: 'Rød svingel', latin: 'Festuca rubra L.', peak: 2.5, root: 1.15, head: 'panicle' },
-  tall:   { name: 'Strand-svingel', latin: 'Festuca arundinacea Schreb.', peak: 3.5, root: 1.5, head: 'panicle' },
-  mix:    { name: 'Græsplæne, blandet', latin: 'Gramineae', peak: 4.0, root: 1.0, head: 'spike' },
+  rye:    { name: 'Almindelig rajgræs', latin: 'Lolium perenne L.', peak: 4.5, root: 0.9, head: 'spike', short: 'rajgræs' },
+  poa:    { name: 'Eng-rapgræs', latin: 'Poa pratensis L.', peak: 3.5, root: 1.0, head: 'panicle', short: 'engrapgræs' },
+  fescue: { name: 'Rød svingel', latin: 'Festuca rubra L.', peak: 2.5, root: 1.15, head: 'fescue', short: 'rødsvingel' },
+  tall:   { name: 'Strand-svingel', latin: 'Festuca arundinacea Schreb.', peak: 3.5, root: 1.5, head: 'tall', short: 'strandsvingel' },
+  mix:    { name: 'Græsplæne, blandet', latin: 'Gramineae', peak: 4.0, root: 1.0, head: 'spike', short: 'blandet græs' },
 };
 const SOILS = {                     // aw = plantetilgængeligt vand i rodzonen (mm); drain = afdræning af overfladevand pr. time; soft = grænse for blød jord (mm)
-  sand: { name: 'sandet jord', aw: 35, drain: 0.93, soft: 10 },
-  loam: { name: 'muldjord', aw: 70, drain: 0.96, soft: 6 },
-  clay: { name: 'lerjord', aw: 90, drain: 0.98, soft: 4 },
+  sand: { short: 'sand', name: 'sandet jord', aw: 35, drain: 0.93, soft: 10 },
+  loam: { short: 'muld', name: 'muldjord', aw: 70, drain: 0.96, soft: 6 },
+  clay: { short: 'ler', name: 'lerjord', aw: 90, drain: 0.98, soft: 4 },
 };
 const FERT = { high: 1.25, some: 1.0, none: 0.75 };
 const DRY_MM = 0.02, DAMP_MM = 0.10, FROST_C = 0.3;
@@ -321,6 +321,7 @@ function sampleData(startUTCms) {
 const DAYS = ['søn', 'man', 'tir', 'ons', 'tor', 'fre', 'lør'];
 const DAYS_FULL = ['Søndag', 'Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag'];
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+const MONTHS_FULL = ['januar', 'februar', 'marts', 'april', 'maj', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'december'];
 const LABEL = { dry: 'Tørt', soft: 'Tørt, men blød jord', damp: 'Lidt fugtigt', wet: 'Vådt', rain: 'Regn', frost: 'Frost på græsset' };
 const $ = id => document.getElementById(id);
 const store = {
@@ -352,7 +353,7 @@ function loadMows() {
   return Array.isArray(a) ? a.filter(x => Number.isFinite(x) && x > lo && x < hi).sort((p, q) => p - q).slice(-30) : [];
 }
 let mows = loadMows();
-let data = null, isSample = false, selected = null, model = null, staleFrom = null;
+let data = null, isSample = false, selected = null, model = null, staleFrom = null, wheelState = null;
 
 const pad = n => String(n).padStart(2, '0');
 const hhmm = t => { const d = new Date(t); return pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()); };
@@ -427,7 +428,8 @@ function render() {
   if (ci < 0) ci = now < blocks[0].start ? 0 : blocks.length - 1;
   const cur = blocks[ci];
   const d = new Date(now);
-  $('eyebrow').textContent = `${loc.name} · ${DAYS[d.getUTCDay()]} ${d.getUTCDate()}. ${MONTHS[d.getUTCMonth()]} ${hhmm(now)}`;
+  $('plateCaption').textContent = `${loc.name}, ${DAYS_FULL[d.getUTCDay()].toLowerCase()} den ${d.getUTCDate()}. ${MONTHS_FULL[d.getUTCMonth()]}, kl. ${hhmm(now)}`;
+  $('locLine').textContent = loc.name;
   const doy = Math.floor((now - Date.UTC(d.getUTCFullYear(), 0, 1)) / 864e5) + 1;
   $('plateNo').textContent = `Tab. ${roman(doy)}`;
   const type = GRASS_TYPES[opts.type];
@@ -473,11 +475,35 @@ function render() {
 
   const adv = cutAdvice(st, now, opts, isSample ? 55.7 : loc.lat);
   model.cur = cur; model.Wnow = Wnow;
-  drawScene(st, cur, Wnow, cap, now);
-  renderPlan(st, blocks, now, adv);
-  renderRain(st, now);
-  renderWater(st, now, adv);
+  const microPlan = renderPlan(st, blocks, now, adv);
+  const rain = renderRain(st, now);
+  const water = renderWater(st, now, adv);
   renderCut(adv);
+  // hjulets midte og felter
+  const longNow = curWin && (curWin.end - now) / 60000 >= opts.dur;
+  const words = { dry: 'Tørt', soft: 'Tørt', damp: 'Fugtigt', wet: 'Vådt', rain: 'Regn', frost: 'Frost' };
+  const ccNow = (st.find(x => x.t >= now) || st[st.length - 1]).cc;
+  const emblem = cur.status === 'rain' ? 'rain' : cur.status === 'frost' ? 'frost' : cur.dark ? 'moon' : (cur.status === 'wet' || cur.status === 'damp') ? 'drop' : ccNow > 0.7 ? 'cloud' : 'sun';
+  const shortWin = w => `${dayName(w.start, now)} ${hhmm(w.start).slice(0, 2)}–${(hhmm(w.end) === '00:00' ? '24' : hhmm(w.end).slice(0, 2))}`;
+  let sub;
+  if (longNow) sub = `slå nu · til kl. ${hhmm(curWin.end)}`;
+  else if (cur.dark && (cur.status === 'dry' || cur.status === 'soft')) sub = 'men det er mørkt';
+  else if (nextW) sub = `tørt ${shortWin(nextW)}`;
+  else sub = 'intet tørt vindue';
+  let microVand;
+  if (water.mode === 'water') microVand = `vand ca. ${water.amount} mm`;
+  else if (rain.ongoing) microVand = 'det regner nu';
+  else if (rain.next) microVand = `regn ${dayName(rain.next.start, now)} kl. ${hhmm(rain.next.start).slice(0, 2)}`;
+  else microVand = 'ingen regn i sigte';
+  const wetness = cur.status === 'rain' ? 1 : clamp(Wnow / cap, 0, 1);
+  const season = document.documentElement.dataset.season;
+  wheelState = {
+    season, kind: GRASS_TYPES[opts.type].head, wet: wetness > 0.05 ? wetness : 0, frost: cur.status === 'frost',
+    word: words[cur.status], sub, emblem, color: `var(--st-${cur.status})`,
+    micro: { slaa: cur.status === 'frost' ? 'rim på græsset' : cur.status === 'rain' ? 'regn på stråene' : Wnow > DRY_MM ? `${mm(Wnow)} mm vand på stråene` : cur.dark ? 'tørre strå, mørkt' : 'tørre strå', plan: microPlan, vand: microVand, plaene: `${GRASS_TYPES[opts.type].short} · ${SOILS[opts.soil].short}` },
+  };
+  drawWheel(wheelState);
+  drawFigures(wheelState, cur);
   renderDays(blocks, now, ci);
   $('tl').hidden = false;
   drawChart();
@@ -529,6 +555,12 @@ function renderPlan(st, blocks, now, adv) {
   $('planSub').textContent = sub;
   $('mowUndo').hidden = mows.length === 0;
   $('plan').hidden = false;
+  if (adv.mode === 'rest' && p.rate < 0.3) return 'hvile';
+  if (last === null) return freqText(p).toLowerCase();
+  if (p.due !== null && p.due <= now) return 'klar til at blive slået';
+  if (p.window) return 'næste gang ' + dayName(p.window.start, now);
+  if (p.due !== null) return `om ca. ${Math.max(1, Math.round((p.due - now) / 864e5))} dage`;
+  return freqText(p).toLowerCase();
 }
 function renderRain(st, now) {
   const r = lastAndNextRain(st, now);
@@ -554,6 +586,7 @@ function renderRain(st, now) {
     $('nextRainSub').textContent = `Tørvejr frem til ${dayName(st[st.length - 1].t - 1, now)}`;
   }
   $('facts').hidden = false;
+  return r;
 }
 function renderWater(st, now, adv) {
   const m = seasonMonth(now, isSample ? 55.7 : loc.lat);
@@ -570,6 +603,7 @@ function renderWater(st, now, adv) {
   $('soilFill').style.width = clamp(w.pct * 100, 0, 100) + '%';
   $('soilVal').textContent = `${Math.round(w.pct * 100)} %`;
   $('water').hidden = false;
+  return w;
 }
 function renderCut(a) {
   const range = a.lo === a.hi ? cmTxt(a.lo) : `${mm(a.lo, a.lo % 1 ? 1 : 0)}–${cmTxt(a.hi)}`;
@@ -600,204 +634,6 @@ function bladePath(x, base, w, h, lean) {
   return `M${f1(x - w / 2)},${base} C${f1(x - w / 2)},${f1(base - h * 0.5)} ${f1(x + lean * 0.6 - 1)},${f1(base - h * 0.82)} ${f1(tx)},${f1(ty)} ` +
          `C${f1(x + lean * 0.6 + 1)},${f1(base - h * 0.82)} ${f1(x + w / 2)},${f1(base - h * 0.5)} ${f1(x + w / 2)},${base} Z`;
 }
-function washFilter(defs, id, scale) {
-  const f = el('filter', { id, x: '-15%', y: '-15%', width: '130%', height: '130%' }, defs);
-  el('feTurbulence', { type: 'fractalNoise', baseFrequency: '0.045', numOctaves: '2', seed: '5', result: 'n' }, f);
-  el('feDisplacementMap', { in: 'SourceGraphic', in2: 'n', scale: String(scale), xChannelSelector: 'R', yChannelSelector: 'G' }, f);
-}
-function leafShape(g, R, cls) {
-  const d = 'M0,-10 C5,-7 6.5,3 0,10 C-6.5,3 -5,-7 0,-10 Z';
-  el('path', { d, class: `${cls} wash`, transform: 'translate(.8 .6)' }, g);
-  el('path', { d, class: 'ink' }, g);
-  el('path', { d: 'M0,-9 L0,12', class: 'ink thin' }, g);
-  for (const y of [-4, 0, 4]) { el('path', { d: `M0,${y} L3.6,${y - 3}`, class: 'hair' }, g); el('path', { d: `M0,${y} L-3.6,${y - 3}`, class: 'hair' }, g); }
-}
-function daisy(g, x, y, s) {
-  const fg = el('g', { transform: `translate(${f1(x)} ${f1(y)}) scale(${s})` }, g);
-  el('path', { d: 'M0,0 C1,8 0,16 1,24', class: 'ink thin' }, fg);
-  for (let k = 0; k < 12; k++) {
-    const a = k * 30;
-    el('ellipse', { cx: 0, cy: -4.6, rx: 1.3, ry: 3.6, class: 'paperfill', transform: `rotate(${a})` }, fg);
-    el('ellipse', { cx: 0, cy: -4.6, rx: 1.3, ry: 3.6, class: 'ink thin', transform: `rotate(${a})` }, fg);
-  }
-  el('circle', { r: 2.2, class: 'w-flower wash' }, fg);
-  el('circle', { r: 2.2, class: 'ink thin' }, fg);
-}
-function clover(g, x, y, s) {
-  const fg = el('g', { transform: `translate(${f1(x)} ${f1(y)}) scale(${s})` }, g);
-  el('path', { d: 'M0,4 C-1,12 1,18 0,26', class: 'ink thin' }, fg);
-  el('circle', { r: 5.5, class: 'w-clover wash' }, fg);
-  for (let k = 0; k < 16; k++) { const a = k * Math.PI / 8; el('path', { d: `M${f1(Math.cos(a) * 1.5)},${f1(Math.sin(a) * 1.5)} L${f1(Math.cos(a) * 5.5)},${f1(Math.sin(a) * 5.5)}`, class: 'ink thin' }, fg); }
-  for (const [dx, dy] of [[-4, 22], [4, 22], [0, 18.5]]) { el('circle', { cx: dx, cy: dy, r: 3, class: 'w-grass wash' }, fg); el('circle', { cx: dx, cy: dy, r: 3, class: 'ink thin' }, fg); }
-}
-function seedHead(g, x, base, h, lean, kind, dried) {
-  const tipX = x + lean, tipY = base - h;
-  el('path', { d: `M${f1(x)},${base} Q${f1(x + lean * 0.3)},${f1(base - h * 0.6)} ${f1(tipX)},${f1(tipY)}`, class: 'ink thin' }, g);
-  const cls = dried ? 'w-grass2' : 'w-grass';
-  if (kind === 'spike') {
-    for (let k = 0; k < 9; k++) {
-      const f = 0.62 + k * 0.042, px = x + (tipX - x) * f * f, py = base - h * f;
-      const side = k % 2 ? 1 : -1;
-      const sp = el('g', { transform: `translate(${f1(px)} ${f1(py)}) rotate(${side * 32})` }, g);
-      el('ellipse', { cx: 0, cy: -4, rx: 1.8, ry: 4.4, class: `${cls} wash` }, sp);
-      el('ellipse', { cx: 0, cy: -4, rx: 1.8, ry: 4.4, class: 'ink thin' }, sp);
-    }
-  } else {
-    for (let k = 0; k < 7; k++) {
-      const f = 0.6 + k * 0.055, px = x + (tipX - x) * f * f, py = base - h * f;
-      const side = k % 2 ? 1 : -1, len = 14 - k * 1.3;
-      const ex = px + side * len, ey = py - len * 0.55;
-      el('path', { d: `M${f1(px)},${f1(py)} Q${f1(px + side * len * 0.5)},${f1(py - len * 0.1)} ${f1(ex)},${f1(ey)}`, class: 'hair' }, g);
-      for (const q of [0.55, 1]) {
-        const sx = px + (ex - px) * q, sy = py + (ey - py) * q;
-        el('ellipse', { cx: f1(sx), cy: f1(sy), rx: 1.4, ry: 2.6, class: `${cls} wash`, transform: `rotate(${side * 40} ${f1(sx)} ${f1(sy)})` }, g);
-        el('ellipse', { cx: f1(sx), cy: f1(sy), rx: 1.4, ry: 2.6, class: 'ink thin', transform: `rotate(${side * 40} ${f1(sx)} ${f1(sy)})` }, g);
-      }
-    }
-  }
-}
-function drawScene(st, cur, Wnow, cap, now) {
-  const svg = $('scene'); svg.textContent = '';
-  const today = dayKey(now);
-  const dayStamps = st.filter(s => dayKey(s.t) === today && s.isDay);
-  const sunrise = dayStamps.length ? dayStamps[0].t - 18e5 : Date.parse(today + 'T07:00:00Z');
-  const sunset = dayStamps.length ? dayStamps[dayStamps.length - 1].t + 18e5 : Date.parse(today + 'T18:00:00Z');
-  const near = Math.min(Math.abs(now - sunrise), Math.abs(now - sunset)) < 36e5;
-  const ccNow = (st.find(s => s.t >= now) || st[st.length - 1]).cc;
-  let phase;
-  if (cur.dark) phase = near ? 'dusk' : 'night';
-  else if (cur.status === 'rain') phase = 'rain';
-  else if (cur.status === 'frost') phase = 'frost';
-  else if (near) phase = 'dusk';
-  else if (ccNow > 0.7) phase = 'overcast';
-  else phase = 'day';
-  $('hero').className = 'plate phase-' + phase;
-  const season = document.documentElement.dataset.season;
-  const m = seasonMonth(now, isSample ? 55.7 : loc.lat);
-  const R = rng(11);
-  const ground = 200;
-  // Tegningen udvides i bredden efter pladsen, så himlen aldrig beskæres.
-  const vw = svg.clientWidth || 400, vh = svg.clientHeight || 210;
-  const VW = Math.max(400, Math.round(210 * vw / vh)), X0 = Math.round((400 - VW) / 2);
-  svg.setAttribute('viewBox', `${X0} 0 ${VW} 210`);
-
-  const defs = el('defs', {}, svg);
-  washFilter(defs, 'washF', 5);
-  const sg = el('linearGradient', { id: 'skyG', x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
-  el('stop', { offset: '0', class: 'sky0' }, sg);
-  el('stop', { offset: '1', class: 'sky1' }, sg);
-  el('rect', { x: X0 - 60, y: -20, width: VW + 120, height: 175, fill: 'url(#skyG)', filter: 'url(#washF)' }, svg);
-
-  // himmel
-  if (phase === 'night') {
-    for (let i = 0; i < 22; i++) {
-      const x = X0 + R() * VW, y = 8 + R() * 90, s = 1.4 + R() * 1.6;
-      el('path', { d: `M${f1(x - s)},${f1(y)} L${f1(x + s)},${f1(y)} M${f1(x)},${f1(y - s)} L${f1(x)},${f1(y + s)}`, class: 'ink thin' + (R() > 0.5 ? ' twinkle' : '') }, svg);
-    }
-    const mg = el('g', { transform: `translate(${X0 + VW - 82} 46)` }, svg);
-    const md = 'M0,-17 A17,17 0 1,0 14,10 A13,13 0 1,1 0,-17 Z';
-    el('path', { d: md, class: 'w-moon wash' }, mg);
-    el('path', { d: md, class: 'ink' }, mg);
-    for (let k = 0; k < 6; k++) el('path', { d: `M${-12 + k * 2},${-6 + k * 3} l5,-3`, class: 'hair' }, mg);
-  } else if (phase !== 'rain') {
-    const fr = clamp((now - sunrise) / (sunset - sunrise), 0, 1);
-    const sx = X0 + 40 + fr * (VW - 80), sy = 112 - Math.sin(fr * Math.PI) * 80;
-    const sgp = el('g', { transform: `translate(${f1(sx)} ${f1(sy)})`, opacity: phase === 'overcast' ? 0.5 : 1 }, svg);
-    el('circle', { r: 13, class: 'w-sun wash' }, sgp);
-    el('circle', { r: 13, class: 'ink' }, sgp);
-    for (let k = 0; k < 16; k++) {
-      const a = k * Math.PI / 8, r1 = 17, r2 = k % 2 ? 22 : 28;
-      el('path', { d: `M${f1(Math.cos(a) * r1)},${f1(Math.sin(a) * r1)} L${f1(Math.cos(a) * r2)},${f1(Math.sin(a) * r2)}`, class: 'ink thin' }, sgp);
-    }
-  }
-  const nClouds = phase === 'rain' ? 4 : ccNow > 0.85 ? 4 : ccNow > 0.55 ? 3 : ccNow > 0.25 ? 2 : ccNow > 0.08 ? 1 : 0;
-  const spots = [[X0 + VW * 0.17, 34], [X0 + VW * 0.62, 22], [X0 + VW * 0.42, 62], [X0 + VW * 0.86, 58]];
-  for (let i = 0; i < nClouds; i++) {
-    const [cx, cy] = spots[i], s = 0.8 + R() * 0.45;
-    const cg = el('g', { transform: `translate(${f1(cx)} ${cy}) scale(${s.toFixed(2)})` }, svg);
-    const bumps = [[-24, 0, 10], [-10, -7, 13], [7, -9, 14], [22, -2, 10], [31, 2, 7]];
-    for (const [bx, by, br] of bumps) el('circle', { cx: bx, cy: by, r: br + 0.7, class: 'ink' }, cg);
-    for (const [bx, by, br] of bumps) el('circle', { cx: bx, cy: by, r: br, class: 'paperfill' }, cg);
-    el('rect', { x: -36, y: 1, width: 72, height: 14, class: 'paperfill' }, cg);
-    el('path', { d: 'M-33,1 L37,1', class: 'ink' }, cg);
-    for (let k = 0; k < 5; k++) el('path', { d: `M${-26 + k * 9},-1 l7,0`, class: 'hair' }, cg);
-  }
-  if (phase === 'rain') {
-    const rg = el('g', {}, svg);
-    for (let i = 0; i < 55; i++) {
-      const x = X0 + R() * VW, y = R() * 150 - 10;
-      const ln = el('path', { d: `M${f1(x)},${f1(y)} l-3,11`, class: 'rain raindrop' }, rg);
-      ln.style.animationDelay = (-R() * 0.95).toFixed(2) + 's';
-      ln.style.animationDuration = (0.75 + R() * 0.4).toFixed(2) + 's';
-    }
-  }
-  if (season === 'autumn') {
-    const lg = el('g', {}, svg);
-    for (let i = 0; i < 6; i++) {
-      const g = el('g', { transform: `translate(${f1(X0 + 30 + R() * (VW - 60))} ${f1(10 + R() * 60)}) scale(${(0.8 + R() * 0.5).toFixed(2)})` }, lg);
-      const inner = el('g', { class: 'leaf' }, g);
-      inner.style.animationDelay = (-R() * 16).toFixed(1) + 's';
-      inner.style.animationDuration = (13 + R() * 6).toFixed(1) + 's';
-      leafShape(inner, R, ['w-leaf1', 'w-leaf2', 'w-leaf3'][i % 3]);
-    }
-  }
-  if (season === 'winter' && (cur.status === 'frost' || cur.T < 2)) {
-    for (let i = 0; i < 14; i++) {
-      const x = X0 + R() * VW, y = 10 + R() * 120, s = 2 + R() * 2;
-      let d = ''; for (let k = 0; k < 3; k++) { const a = k * Math.PI / 3; d += `M${f1(x - Math.cos(a) * s)},${f1(y - Math.sin(a) * s)} L${f1(x + Math.cos(a) * s)},${f1(y + Math.sin(a) * s)} `; }
-      el('path', { d, class: 'ink thin' }, svg);
-    }
-  }
-
-  // jord
-  el('rect', { x: X0 - 60, y: ground - 3, width: VW + 120, height: 30, class: 'w-soil wash', filter: 'url(#washF)' }, svg);
-  for (let i = 0; i < Math.round(VW / 9); i++) { const x = X0 - 15 + R() * (VW + 30), y = ground + 1 + R() * 9; el('path', { d: `M${f1(x)},${f1(y)} l${f1(5 + R() * 15)},0`, class: 'hair' }, svg); }
-  if (season === 'autumn') {
-    for (let i = 0; i < 4; i++) {
-      const g = el('g', { transform: `translate(${f1(X0 + 20 + R() * (VW - 40))} ${f1(ground + 2)}) rotate(${f1(70 + R() * 40)}) scale(.75)` }, svg);
-      leafShape(g, R, ['w-leaf1', 'w-leaf2', 'w-leaf3'][i % 3]);
-    }
-  }
-
-  // græs og blomster
-  const sway = el('g', { class: 'sway' }, svg);
-  const washG = el('g', { filter: 'url(#washF)' }, sway);
-  const inkG = el('g', {}, sway);
-  const tips = [];
-  for (let i = 0, nb = Math.round(VW / 8.8) + 3; i < nb; i++) {
-    const x = X0 - 10 + i * 8.8 + (R() - 0.5) * 6;
-    const h = 52 + R() * 72, lean = (R() - 0.5) * 54, w = 4 + R() * 3.2;
-    const d = bladePath(x, ground + 2, w, h, lean);
-    const alt = R() < (season === 'autumn' ? 0.32 : season === 'winter' ? 0.4 : 0.18);
-    el('path', { d, class: (alt ? 'w-grass2' : 'w-grass') + ' wash', transform: 'translate(1.2 .8)' }, washG);
-    el('path', { d, class: 'ink' }, inkG);
-    el('path', { d: `M${f1(x)},${ground + 2} Q${f1(x + lean * 0.5)},${f1(ground + 2 - h * 0.7)} ${f1(x + lean)},${f1(ground + 2 - h)}`, class: 'hair' }, inkG);
-    tips.push([x + lean, ground + 2 - h]);
-  }
-  const heads = (m >= 5 && m <= 7) ? 3 : m === 4 ? 2 : (m >= 8 && m <= 9) ? 2 : 0;
-  const kind = GRASS_TYPES[opts.type].head;
-  for (let i = 0; i < heads; i++) seedHead(inkG, X0 + VW * (0.15 + i * 0.3) + R() * 30, ground + 2, 140 + R() * 28, (R() - 0.5) * 40, kind, m >= 8);
-  if (season === 'spring' || season === 'summer') {
-    const fg = el('g', {}, sway);
-    const nD = season === 'spring' ? 6 : 3;
-    for (let i = 0; i < nD; i++) daisy(fg, X0 + 25 + i * ((VW - 50) / nD) + R() * 30, ground - 20 - R() * 14, 0.85 + R() * 0.3);
-    if (season === 'summer') for (let i = 0; i < 3; i++) clover(fg, X0 + VW * (0.15 + i * 0.3) + R() * 30, ground - 22 - R() * 10, 0.9);
-  }
-  const wf = clamp(Wnow / cap, 0, 1);
-  if (cur.status === 'frost') {
-    for (const [tx, ty] of tips) el('path', { d: `M${f1(tx - 2.5)},${f1(ty + 3)} L${f1(tx)},${f1(ty)} L${f1(tx + 2.5)},${f1(ty + 3)}`, class: 'rime' }, inkG);
-  } else if (Wnow > DRY_MM) {
-    const n = Math.max(4, Math.round(wf * 30));
-    const order = tips.map((t, i) => [rng(i + 11)(), t]).sort((a, b) => a[0] - b[0]).slice(0, n);
-    for (const [, [tx, ty]] of order) {
-      const r = (1.8 + wf * 1.2).toFixed(2);
-      el('circle', { cx: f1(tx), cy: f1(ty + 2.8), r, class: 'w-water' }, inkG);
-      el('circle', { cx: f1(tx), cy: f1(ty + 2.8), r, class: 'ink thin' }, inkG);
-      el('circle', { cx: f1(tx - 0.7), cy: f1(ty + 2), r: 0.6, class: 'paperfill' }, inkG);
-    }
-  }
-}
-
 function drawRuler(a) {
   const svg = $('ruler'); svg.textContent = '';
   const base = 166, cm = 14, x0 = 26;
@@ -961,13 +797,154 @@ function showDetail(b, now) {
   box.append(top, why, facts);
 }
 
+
+/* ---------- hjulet ---------- */
+const SECTIONS = {
+  slaa:   { title: 'Slå nu', kicker: 'Er græsset tørt?' },
+  plan:   { title: 'Klippeplan', kicker: 'Hvornår skal du slå?' },
+  vand:   { title: 'Regn & vand', kicker: 'Regn og vanding' },
+  plaene: { title: 'Din plæne', kicker: 'Indstillinger' },
+};
+let openSec = null, pushedSec = false;
+const WCX = 200, WCY = 200;
+const wpt = (r, deg) => [WCX + r * Math.cos(deg * Math.PI / 180), WCY + r * Math.sin(deg * Math.PI / 180)];
+const P2 = p => `${f1(p[0])},${f1(p[1])}`;
+function arcPath(r, a0, a1, sweep) { return `M${P2(wpt(r, a0))} A${r},${r} 0 0 ${sweep} ${P2(wpt(r, a1))}`; }
+function sectorPath(r0, r1, a0, a1) {
+  const start = r0 > 0 ? `M${P2(wpt(r0, a0))} L${P2(wpt(r1, a0))}` : `M${WCX},${WCY} L${P2(wpt(r1, a0))}`;
+  const back = r0 > 0 ? ` L${P2(wpt(r0, a1))} A${r0},${r0} 0 0 0 ${P2(wpt(r0, a0))}` : ' Z';
+  return `${start} A${r1},${r1} 0 0 1 ${P2(wpt(r1, a1))}${back}${r0 > 0 ? ' Z' : ''}`;
+}
+function fleuron(svg, p) {
+  const g = el('g', { transform: `translate(${f1(p[0])} ${f1(p[1])})` }, svg);
+  for (let k = 0; k < 4; k++) {
+    const a = k * 90;
+    el('ellipse', { cx: 0, cy: -3.2, rx: 1.7, ry: 3, transform: `rotate(${a})`, class: 'medal' }, g);
+    el('ellipse', { cx: 0, cy: -3.2, rx: 1.7, ry: 3, transform: `rotate(${a})`, class: 'ring', 'stroke-width': .5 }, g);
+  }
+  el('circle', { r: 1.3, class: 'ring', 'stroke-width': .6 }, g);
+}
+const QUADS = [
+  { key: 'slaa', a0: 180, a1: 270, base: [117, 163], lab: ['Slå nu', 188, 262, 1] },
+  { key: 'plan', a0: 270, a1: 360, base: [283, 172], lab: ['Klippeplan', 278, 352, 1] },
+  { key: 'vand', a0: 0, a1: 90, base: [283, 317], lab: ['Regn & vand', 82, 8, 0] },
+  { key: 'plaene', a0: 90, a1: 180, base: [117, 318], lab: ['Din plæne', 172, 98, 0] },
+];
+let wheelSig = '';
+function drawWheel(s) {
+  const svg = $('wheel');
+  const sig = JSON.stringify([s.season, s.kind, Math.round(s.wet * 10), s.frost, s.word, s.sub, s.emblem, s.micro]);
+  if (sig === wheelSig) { markActive(); return; }
+  wheelSig = sig;
+  svg.textContent = '';
+  Botany.ensureDefs(svg);
+  const defs = svg.querySelector('defs');
+  for (const q of QUADS) el('path', { d: sectorPath(72, 192, q.a0, q.a1), class: 'sector sec-' + q.key }, svg);
+  for (const q of QUADS) {
+    const id = 'clip-' + q.key;
+    const cp = el('clipPath', { id }, defs);
+    el('path', { d: sectorPath(0, 160, q.a0 + 1.4, q.a1 - 1.4) }, cp);
+    const g = el('g', { 'clip-path': `url(#${id})`, class: 'vig vig-' + q.key }, svg);
+    const inner = el('g', { transform: `translate(${q.base[0]} ${q.base[1]})` }, g);
+    if (q.key === 'slaa') Botany.alchemilla(inner, { season: s.season, wet: s.wet, frost: s.frost, height: 96, seed: 5 });
+    if (q.key === 'plan') Botany.grass(inner, { season: s.season, kind: s.kind, height: 88, seed: 21, frost: s.frost });
+    if (q.key === 'vand') Botany.trifolium(inner, { season: s.season, height: 84, seed: 9 });
+    if (q.key === 'plaene') Botany.bellis(inner, { season: s.season, height: 100, seed: 13 });
+  }
+  el('circle', { cx: WCX, cy: WCY, r: 196.5, class: 'ring', 'stroke-width': 1.4 }, svg);
+  el('circle', { cx: WCX, cy: WCY, r: 192, class: 'ring', 'stroke-width': .5 }, svg);
+  el('circle', { cx: WCX, cy: WCY, r: 164, class: 'ring', 'stroke-width': .5 }, svg);
+  for (const a of [0, 90, 180, 270]) for (const off of [-1.7, 1.7]) {
+    const nx = Math.cos((a + 90) * Math.PI / 180) * off, ny = Math.sin((a + 90) * Math.PI / 180) * off;
+    const p0 = wpt(72, a), p1 = wpt(164, a);
+    el('path', { d: `M${f1(p0[0] + nx)},${f1(p0[1] + ny)} L${f1(p1[0] + nx)},${f1(p1[1] + ny)}`, class: 'ring', 'stroke-width': .5 }, svg);
+  }
+  for (const a of [0, 90, 180, 270]) fleuron(svg, wpt(178, a));
+  for (const q of QUADS) {
+    const [text, a0, a1, sw] = q.lab;
+    const lid = 'lp-' + q.key, mid = 'mp-' + q.key;
+    el('path', { id: lid, d: arcPath(sw ? 172 : 183, a0, a1, sw), fill: 'none' }, defs);
+    el('path', { id: mid, d: arcPath(sw ? 151 : 160, a0 + (sw ? 3 : -3), a1 + (sw ? -3 : 3), sw), fill: 'none' }, defs);
+    const t = el('text', { class: 'lab' }, svg);
+    el('textPath', { href: '#' + lid, startOffset: '50%', 'text-anchor': 'middle' }, t).textContent = text;
+    const m = el('text', { class: 'micro' }, svg);
+    el('textPath', { href: '#' + mid, startOffset: '50%', 'text-anchor': 'middle' }, m).textContent = s.micro[q.key] || '';
+  }
+  el('circle', { cx: WCX, cy: WCY, r: 72, class: 'medal' }, svg);
+  el('circle', { cx: WCX, cy: WCY, r: 72, class: 'ring', 'stroke-width': 1.2 }, svg);
+  el('circle', { cx: WCX, cy: WCY, r: 67.5, class: 'ring', 'stroke-width': .45 }, svg);
+  Botany.emblem(el('g', { transform: `translate(${WCX} ${WCY - 33}) scale(1.2)` }, svg), s.emblem);
+  el('text', { x: WCX, y: WCY + 12, 'text-anchor': 'middle', class: 'word' }, svg).textContent = s.word;
+  const bar = el('rect', { x: WCX - 15, y: WCY + 20, width: 30, height: 2.4, rx: 1.2 }, svg);
+  bar.style.fill = s.color;
+  el('text', { x: WCX, y: WCY + 38, 'text-anchor': 'middle', class: 'subw' }, svg).textContent = s.sub;
+  markActive();
+}
+function markActive() {
+  document.querySelectorAll('#wheel .sector').forEach(e => e.classList.toggle('active', !!openSec && e.classList.contains('sec-' + openSec)));
+  document.querySelectorAll('#wheel .vig').forEach(e => e.classList.toggle('active', !!openSec && e.classList.contains('vig-' + openSec)));
+}
+
+/* ---------- planchernes store tegninger ---------- */
+const figSig = {};
+function drawFig(id, sig, fn) {
+  if (figSig[id] === sig) return;
+  figSig[id] = sig;
+  const svg = $(id); svg.textContent = '';
+  Botany.ensureDefs(svg);
+  fn(el('g', { transform: 'translate(118 184)' }, svg));
+}
+function drawFigures(s, cur) {
+  const wetBucket = Math.round(s.wet * 4);
+  drawFig('fig-slaa', [s.season, wetBucket, s.frost].join(), g => Botany.alchemilla(g, { season: s.season, wet: s.wet, frost: s.frost, detail: 'plate', height: 150, seed: 6 }));
+  drawFig('fig-plan', [s.season, s.kind, s.frost].join(), g => Botany.grass(g, { season: s.season, kind: s.kind, detail: 'plate', height: 150, seed: 22, frost: s.frost }));
+  drawFig('fig-vand', [s.season].join(), g => Botany.trifolium(g, { season: s.season, detail: 'plate', height: 132, seed: 10 }));
+  drawFig('fig-plaene', [s.season].join(), g => Botany.bellis(g, { season: s.season, detail: 'plate', height: 150, seed: 14 }));
+  const note = s.frost ? 'Løvefod · rim på bladene' : cur.status === 'rain' ? 'Løvefod · regndråber på bladene' : s.wet > 0.05 ? 'Løvefod · dug på bladene' : 'Løvefod · tørre blade';
+  $('fignote-slaa').textContent = note;
+}
+
+/* ---------- navigation mellem felterne ---------- */
+function applyHash() {
+  const key = location.hash.replace('#', '');
+  showSection(Object.hasOwn(SECTIONS, key) ? key : null);
+}
+function showSection(key) {
+  openSec = key;
+  for (const p of document.querySelectorAll('.panel')) p.hidden = p.dataset.sec !== key;
+  $('plate').classList.toggle('compact', !!key);
+  $('secHead').hidden = !key;
+  if (key) { $('secTitle').textContent = SECTIONS[key].title; $('secKicker').textContent = SECTIONS[key].kicker; }
+  markActive();
+  if (key === 'slaa') requestAnimationFrame(() => drawChart());
+}
+function goSection(key) {
+  if (openSec === key) return;
+  if (key && openSec) location.replace('#' + key);          // skift mellem felter uden at fylde historikken
+  else if (key) { pushedSec = true; location.hash = key; }
+  else if (pushedSec) { pushedSec = false; history.back(); }
+  else { history.replaceState(null, '', location.pathname + location.search); applyHash(); }
+  const top = $('plate').getBoundingClientRect().top + window.scrollY - 10;
+  if (window.scrollY > top) window.scrollTo({ top, behavior: 'smooth' });
+}
+document.querySelectorAll('.qbtn').forEach(b => b.addEventListener('click', () => goSection(b.dataset.sec)));
+$('backBtn').addEventListener('click', () => goSection(null));
+$('homeLink').addEventListener('click', e => { e.preventDefault(); goSection(null); });
+window.addEventListener('hashchange', applyHash);
+$('locBtn2').addEventListener('click', () => {
+  $('locPanel').hidden = false; $('locBtn').setAttribute('aria-expanded', 'true');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  $('searchInput').focus({ preventScroll: true });
+});
+applyHash();
+
 /* ---------- data ---------- */
 const HOURLY = 'temperature_2m,relative_humidity_2m,precipitation,precipitation_probability,wind_speed_10m,shortwave_radiation,cloud_cover,is_day,et0_fao_evapotranspiration';
 function validForecast(j) { return j && j.hourly && Array.isArray(j.hourly.time) && j.hourly.time.length > 48 && Number.isFinite(+j.utc_offset_seconds); }
 async function load() {
   $('banner').hidden = true;
   $('locName').textContent = loc.name;
-  $('eyebrow').textContent = `Henter vejrudsigt for ${loc.name}…`;
+  $('plateCaption').textContent = `Henter vejrudsigt for ${loc.name}…`;
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat.toFixed(2)}&longitude=${loc.lon.toFixed(2)}&hourly=${HOURLY}&wind_speed_unit=ms&timezone=auto&past_days=30&forecast_days=7`;
   let j;
   try {
@@ -1073,8 +1050,6 @@ $('installBtn').addEventListener('click', async () => {
 });
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 if (window.ResizeObserver) {
-  let lastS = 0;
-  new ResizeObserver(es => { const w = Math.round(es[0].contentRect.width); if (w && w !== lastS) { lastS = w; if (model && model.cur) drawScene(model.st, model.cur, model.Wnow, model.cap, model.now); } }).observe($('scene'));
   let lastW = 0; new ResizeObserver(es => { const w = Math.round(es[0].contentRect.width); if (w && w !== lastW) { lastW = w; drawChart(); } }).observe($('chartWrap')); }
 
 load();
