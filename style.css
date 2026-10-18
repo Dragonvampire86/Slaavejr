@@ -152,6 +152,10 @@ a{color:var(--accent)}
 .sub{color:var(--muted);font-size:.93rem}
 .plan .gauge{margin-top:6px}
 .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.obs{display:flex;flex-direction:column;gap:6px;margin-top:6px;font-size:.92rem;color:var(--muted)}
+.obs-btns{display:flex;flex-wrap:wrap;gap:8px}
+.obs-btns .btn{color:var(--ink)}
+.obs-note{margin:0;font-style:italic;max-width:52ch}
 .facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .fact{display:grid;grid-template-columns:auto 1fr;column-gap:10px;row-gap:2px;align-items:center}
 .fact .ico{grid-row:1;stroke:var(--st-wet)}

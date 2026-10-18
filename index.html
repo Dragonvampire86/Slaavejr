@@ -80,6 +80,14 @@
           <div class="track"><div class="fill water" id="filmFill"></div></div>
           <span class="num" id="filmVal"></span>
         </div>
+        <div class="obs" id="obs" hidden>
+          <span class="obs-q">Passer det med din plæne lige nu?</span>
+          <div class="obs-btns">
+            <button class="btn" id="obsWet" type="button">Græsset er vådt</button>
+            <button class="btn" id="obsDry" type="button">Græsset er tørt</button>
+          </div>
+          <p class="obs-note" id="obsNote" hidden></p>
+        </div>
       </div>
       <div class="card next" id="next" hidden>
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
@@ -230,6 +238,10 @@
             <input type="radio" name="grass" id="grass-long" value="long"><label for="grass-long">Lang (over 10 cm)</label>
           </div>
         </fieldset>
+        <div class="field" id="tuneField" hidden>
+          <span class="legend-like">Tilpasset din have</span>
+          <div class="loc-line"><span id="tuneTxt"></span><button class="btn" id="tuneReset" type="button">Nulstil</button></div>
+        </div>
         <fieldset class="field">
           <legend>Tid til at slå græsset</legend>
           <div class="seg">
@@ -247,11 +259,13 @@
           <p>Programmet henter timeprognosen for dit sted og de seneste 30 døgn. Ud fra den fører det regnskab med vandet på græsstråene, vandet i jorden og hvor meget græsset vokser, time for time.</p>
           <ul>
             <li><b>Regn</b> fylder græsset op til det, stråene kan holde: ca. 0,35 mm for kort græs, 0,5 mm for normalt og 0,8 mm for langt. Resten drypper ned i jorden.</li>
-            <li><b>Dug</b>: Om natten udstråler græsset varme mod himlen. Når overfladen bliver koldere end luftens dugpunkt, kondenserer vand på stråene. Skyer og vind bremser det.</li>
+            <li><b>Dug</b>: Om natten udstråler græsset varme mod himlen. Når overfladen bliver koldere end luftens dugpunkt, kondenserer vand på stråene. Lave skyer og vind bremser det; tynde, høje skyer kun lidt.</li>
+            <li><b>Fugt fra jord og plante</b>: På fugtige nætter (over 90 % luftfugtighed) bliver plænen også våd uden klar himmel: fugt fra den lune jord sætter sig på stråene, og græsset presser selv små dråber ud af bladspidserne. I tåge sætter tågedråberne sig på græsset, og i næsten mættet luft tørrer det meget langsomt.</li>
             <li><b>Fordampning</b>: Om dagen tørrer sol, vind og tør luft græsset. Både dug og fordampning beregnes med Penman–Monteith-ligningen for en våd overflade (FAO-56).</li>
             <li><b>Frost</b>: Græssets overfladetemperatur skønnes ud fra udstrålingen. Under 0 °C regnes græsset som frosset, og det skal ikke slås.</li>
             <li><b>Blød jord</b>: En regnbalance, der dræner hurtigt i sandet jord og langsomt i lerjord.</li>
           </ul>
+          <p><b>Dine meldinger</b>: Trykker du "Græsset er vådt" eller "Græsset er tørt", regner siden videre fra det, du ser. Siger du vådt, hvor beregningen sagde tørt (eller omvendt), justeres din have lidt vådere eller tørrere fremover. Tilpasningen gemmes kun i din browser og kan nulstilles under Din plæne.</p>
           <p>En time tæller som <b>tør</b>, når der er under 0,02 mm vand på stråene hele timen, ingen regn, ingen frost og dagslys. Et vindue skal være mindst så langt som den tid, du har valgt.</p>
           <p><b>Vækst og klippeplan</b>: Græsset vokser mest ved 14–22 °C og næsten ikke under 3–4 °C. Væksten skaleres med lys, vand i jorden, græstype og gødning. Efter 1/3-reglen skal græsset slås, når det er blevet halvanden gang så højt som klippehøjden.</p>
           <p><b>Vanding</b>: Jorden holder ca. 35 mm vand, som rødderne kan nå, i sandet jord, 70 mm i muldjord og 90 mm i lerjord. Når jorden er under ca. 45 % og der ikke kommer regn, foreslås 10–25 mm. 1 mm svarer til 1 liter pr. m².</p>

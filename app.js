@@ -25,6 +25,9 @@ const SOILS = {                     // aw = plantetilgængeligt vand i rodzonen 
 };
 const FERT = { high: 1.25, some: 1.0, none: 0.75 };
 const DRY_MM = 0.02, DAMP_MM = 0.10, FROST_C = 0.3;
+// Fugt fra jord og plante på fugtige nætter (destillation og guttation), mm/time ved 100 % luftfugtighed.
+// Det fanger big-leaf-ligningen ikke, og det er det, der gør plænen våd på overskyede efterårsnætter.
+const CANOPY_MM = 0.02, FOG_MM = 0.03;
 
 function num(v, fb) { return (v === null || v === undefined || v === '' || Number.isNaN(+v)) ? fb : +v; }
 function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
@@ -40,6 +43,12 @@ function simulate(h, elevation, opts) {
   const soil = SOILS[opts.soil] || SOILS.loam;
   const fert = FERT[opts.fert] || 1;
   const n = h.time.length;
+  const wetk = clamp(num(opts.wetk, 1), 0.5, 2);   // din haves personlige faktor: >1 = vådere end standard
+  const lay = h.cloud_cover_low, mid = h.cloud_cover_mid, high = h.cloud_cover_high, vis = h.visibility;
+  // dine egne meldinger ("vådt"/"tørt") lægges ind i den time, hvor de blev givet
+  const nudge = new Map();
+  const t0 = n ? Date.parse(h.time[0] + ':00Z') : 0;
+  for (const o of opts.obs || []) { const k = Math.floor((o.t - t0) / 36e5); if (k >= 0 && k < n) nudge.set(k, !!o.wet); }
   const Patm = 101.3 * Math.pow((293 - 0.0065 * (elevation || 0)) / 293, 5.26);
   const gamma = 0.000665 * Patm;
   const C = soil.aw * type.root;
@@ -61,7 +70,11 @@ function simulate(h, elevation, opts) {
     const delta = 4098 * es / Math.pow(T + 237.3, 2);
     const Tk = T + 273.15;
     const L0 = SIGMA * Math.pow(Tk, 4) * Math.max(0.05, 0.34 - 0.14 * Math.sqrt(ea));
-    const Rnl = L0 * Math.max(0.05, 1 - 0.85 * cc) * site.sky;   // netto langbølget udstråling (W/m²)
+    // effektivt skydække for udstrålingen: lave skyer lukker næsten helt af, tynde høje skyer kun lidt
+    let ccEff = cc;
+    const cl = num(lay && lay[i], null), cm = num(mid && mid[i], null), ch = num(high && high[i], null);
+    if (cl !== null && cm !== null && ch !== null) ccEff = Math.min(cc, 1 - (1 - clamp(cl, 0, 100) / 100) * (1 - 0.7 * clamp(cm, 0, 100) / 100) * (1 - 0.3 * clamp(ch, 0, 100) / 100));
+    const Rnl = L0 * Math.max(0.05, 1 - 0.85 * ccEff) * site.sky; // netto langbølget udstråling (W/m²)
     const Rn = 0.77 * Rs - Rnl;                                   // nettostråling, albedo 0,23
     const G = Rn > 0 ? 0.1 * Rn : 0.5 * Rn;                       // jordvarmestrøm (FAO-56, timebasis)
     const ra = 208 / u2;                                          // aerodynamisk modstand (s/m)
@@ -69,14 +82,25 @@ function simulate(h, elevation, opts) {
     const Epot = lamE / LAMBDA * 3600;                            // mm/time; negativ = dug
     const Ts = Rn < 0 ? T + (Rn - G) / (7 + 4 * u2) : T;         // skønnet græsoverflade-temperatur
 
+    // tåge: sigtbarhed under 1 km, eller næsten mættet luft
+    const v = num(vis && vis[i], null);
+    const fog = Math.max(v === null ? 0 : clamp((1000 - v) / 800, 0, 1), clamp((RH - 97) / 3, 0, 1));
     // vand på stråene
+    const before = W;
     if (P > 0) { W = Math.min(grass.cap, W + P); if (P >= 0.05) source = 'rain'; }
-    if (Epot < 0) {
-      const before = W;
-      W = Math.min(grass.cap, W + (-Epot));
-      if (before <= DRY_MM && W > DRY_MM) source = 'dew';
-    } else {
-      W = Math.max(0, W - Epot * grass.dry * (Ts <= 0 ? 0.3 : 1));
+    let gain = Math.max(0, -Epot);                                // dug fra luften
+    if (!isDay && RH >= 90) gain += CANOPY_MM * (RH - 90) / 10;  // fugt fra jord og plante om natten
+    gain += FOG_MM * fog;                                         // tågedråber, der sætter sig på stråene
+    if (gain > 0) W = Math.min(grass.cap, W + gain * wetk);
+    if (Epot > 0) {
+      // i næsten mættet luft og tåge tørrer tætte græstæpper langt langsommere end ligningen siger
+      const fSat = clamp((100 - RH) / 6, 0.15, 1) * (1 - 0.7 * fog);
+      W = Math.max(0, W - Epot * grass.dry * (Ts <= 0 ? 0.3 : 1) * fSat / wetk);
+    }
+    if (before <= DRY_MM && W > DRY_MM && P < 0.05) source = 'dew';
+    if (nudge.has(i)) {
+      if (nudge.get(i)) { if (W < grass.cap * 0.8) { W = grass.cap * 0.8; source = 'obs'; } }
+      else { W = 0; source = null; }
     }
     if (W <= DRY_MM) source = null;
     // overfladevand (blød jord) og jordvand i rodzonen
@@ -90,7 +114,7 @@ function simulate(h, elevation, opts) {
     Gc += type.peak / 24 * growthT(T) * fL * fW * fert;
 
     st[i] = {
-      t: Date.parse(h.time[i] + ':00Z'), T, RH, u10, P, Rs, cc, isDay, Epot, Ts, W, S, AW, G: Gc, source,
+      t: Date.parse(h.time[i] + ':00Z'), T, RH, u10, P, Rs, cc, isDay, Epot, Ts, W, S, AW, G: Gc, source, fog,
       prob: h.precipitation_probability ? num(h.precipitation_probability[i], null) : null,
     };
   }
@@ -353,6 +377,15 @@ function loadMows() {
   return Array.isArray(a) ? a.filter(x => Number.isFinite(x) && x > lo && x < hi).sort((p, q) => p - q).slice(-30) : [];
 }
 let mows = loadMows();
+// dine egne meldinger om vådt/tørt græs og den tilpasning, de har givet (kun i browseren)
+function loadObs() {
+  const a = store.get('obs', []);
+  const lo = Date.now() - 35 * 864e5, hi = Date.now() + 36e5;
+  return Array.isArray(a) ? a.filter(o => o && Number.isFinite(o.t) && o.t > lo && o.t < hi && typeof o.wet === 'boolean')
+    .map(o => ({ t: o.t, wet: o.wet, adj: clamp(num(o.adj, 1), 0.5, 2) })).sort((p, q) => p.t - q.t).slice(-40) : [];
+}
+let obs = loadObs();
+let wetk = clamp(num(store.get('wetk', 1), 1), 0.5, 2);
 let data = null, isSample = false, selected = null, model = null, staleFrom = null, wheelState = null;
 
 const pad = n => String(n).padStart(2, '0');
@@ -399,7 +432,8 @@ function reasonFor(b) {
   switch (b.status) {
     case 'rain': return `Der falder ${mm(b.P, 1)} mm regn i denne time.`;
     case 'frost': return `Græssets overflade er skønnet til ${mm(b.Ts, 1)} °C. Frosne strå knækker og bliver brune, hvis de slås.`;
-    case 'wet': return b.source === 'dew' ? `Dug fra natten: ca. ${water}.` : `Vådt efter regn: ca. ${water}.`;
+    case 'wet': return b.source === 'obs' ? `Du har meldt vådt græs. Beregningen regner videre fra ca. ${water}.`
+      : b.source === 'dew' ? `Dug og fugt fra natten: ca. ${water}.` : `Vådt efter regn: ca. ${water}.`;
     case 'damp': return `Næsten tørt, men stadig ca. ${water}. Afklippet klumper.`;
     case 'soft': return `Stråene er tørre, men jorden er blød efter regn. Undgå hjulspor.`;
     default: return b.dark ? 'Stråene er tørre, men det er mørkt.' : 'Ingen dug eller regn på stråene.';
@@ -408,7 +442,7 @@ function reasonFor(b) {
 
 function run() {
   if (!data) return;
-  const sim = simulate(data.hourly, data.elevation, opts);
+  const sim = simulate(data.hourly, data.elevation, Object.assign({}, opts, { wetk, obs: isSample ? [] : obs.map(o => ({ t: o.t + offsetMs(), wet: o.wet })) }));
   const blocks = toBlocks(sim.st, sim.soft);
   model = { blocks, cap: sim.cap, st: sim.st, C: sim.C };
   render();
@@ -461,6 +495,7 @@ function render() {
   $('film').hidden = false;
   $('filmFill').style.width = Math.min(100, Wnow / cap * 100) + '%';
   $('filmVal').textContent = `${mm(Wnow)} / ${mm(cap)} mm`;
+  renderObs();
 
   const nextW = wins.find(w => !(curWin && w.k === curWin.k));
   $('next').hidden = false;
@@ -1085,7 +1120,7 @@ $('locBtn2').addEventListener('click', () => {
 applyHash();
 
 /* ---------- data ---------- */
-const HOURLY = 'temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,shortwave_radiation,cloud_cover,is_day,et0_fao_evapotranspiration';
+const HOURLY = 'temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,shortwave_radiation,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,visibility,is_day,et0_fao_evapotranspiration';
 function validForecast(j) { return j && j.hourly && Array.isArray(j.hourly.time) && j.hourly.time.length > 48 && Number.isFinite(+j.utc_offset_seconds); }
 // DMI's HARMONIE-model (2 km, de første 2,5 døgn) dækker Nord- og Centraleuropa. Open-Meteo forlænger den med ECMWF.
 const inDMI = l => l.lat >= 44 && l.lat <= 72 && l.lon >= -30 && l.lon <= 42;
@@ -1203,6 +1238,45 @@ function logMow(epoch) {
 $('mowToday').addEventListener('click', () => logMow(Date.now()));
 $('mowYesterday').addEventListener('click', () => logMow(Date.now() - 864e5));
 $('mowUndo').addEventListener('click', () => { mows = mows.slice(0, -1); store.set('mows', mows); if (model) render(); });
+
+/* ---------- dine meldinger: vådt eller tørt græs ---------- */
+function renderObs() {
+  $('obs').hidden = isSample;
+  const last = obs.length ? obs[obs.length - 1] : null;
+  const age = last ? Date.now() - last.t : Infinity;
+  if (last && age < 12 * 36e5) {
+    $('obsNote').hidden = false;
+    $('obsNote').textContent = `Du meldte ${last.wet ? 'vådt' : 'tørt'} græs kl. ${hhmm(last.t + offsetMs())}.` +
+      (age < 10 * 60000 && last.adj > 1.01 ? ' Din have regnes fremover lidt vådere.' : age < 10 * 60000 && last.adj < 0.99 ? ' Din have regnes fremover lidt tørrere.' : '');
+  } else $('obsNote').hidden = true;
+  const pct = Math.round(Math.abs(wetk - 1) * 100);
+  $('tuneField').hidden = pct < 3 && !obs.length;
+  $('tuneTxt').textContent = pct < 3 ? `${obs.length} ${obs.length === 1 ? 'melding' : 'meldinger'}, ingen justering endnu`
+    : `Græsset regnes ca. ${pct} % ${wetk > 1 ? 'vådere' : 'tørrere'} end standard (${obs.length} ${obs.length === 1 ? 'melding' : 'meldinger'})`;
+}
+function reportGrass(wet) {
+  if (!model || isSample) return;
+  const t = Date.now();
+  // en ny melding inden for en time erstatter den forrige (fx hvis man trykkede forkert)
+  const prev = obs.length ? obs[obs.length - 1] : null;
+  if (prev && t - prev.t < 36e5) { wetk = clamp(wetk / prev.adj, 0.5, 2); obs.pop(); run(); }
+  // sammenlign med det, beregningen selv mente; lær højst én gang pr. 6 timer
+  const Wm = model.Wnow, st = model.cur.status;
+  const recent = obs.length && t - obs[obs.length - 1].t < 6 * 36e5;
+  let adj = 1;
+  if (!recent && st !== 'rain' && st !== 'frost') {
+    if (wet) adj = Wm <= DRY_MM ? 1.2 : Wm <= DAMP_MM ? 1.08 : 1;
+    else adj = Wm > DAMP_MM ? 1 / 1.2 : Wm > DRY_MM ? 1 / 1.08 : 1;
+  }
+  const k2 = clamp(wetk * adj, 0.5, 2);
+  adj = k2 / wetk; wetk = k2;
+  obs = obs.concat([{ t, wet, adj }]).slice(-40);
+  store.set('obs', obs); store.set('wetk', wetk);
+  run();
+}
+$('obsWet').addEventListener('click', () => reportGrass(true));
+$('obsDry').addEventListener('click', () => reportGrass(false));
+$('tuneReset').addEventListener('click', () => { obs = []; wetk = 1; store.set('obs', obs); store.set('wetk', wetk); run(); });
 
 /* ---------- indstillinger ---------- */
 for (const name of ['type', 'soil', 'fert', 'site', 'grass', 'dur']) {
