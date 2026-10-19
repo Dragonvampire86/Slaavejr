@@ -25,9 +25,12 @@ const SOILS = {                     // aw = plantetilgængeligt vand i rodzonen 
 };
 const FERT = { high: 1.25, some: 1.0, none: 0.75 };
 const DRY_MM = 0.02, DAMP_MM = 0.10, FROST_C = 0.3;
-// Fugt fra jord og plante på fugtige nætter (destillation og guttation), mm/time ved 100 % luftfugtighed.
-// Det fanger big-leaf-ligningen ikke, og det er det, der gør plænen våd på overskyede efterårsnætter.
-const CANOPY_MM = 0.02, FOG_MM = 0.03;
+// Om natten er en tæt plæne koldere end luften og fanget i sit eget fugtige luftlag. Den tørrer derfor
+// næsten ikke, og den bliver våd af fugt fra den lune jord (destillation), af dråber, planten selv presser
+// ud af bladspidserne (guttation), og af dug lavt i græsset. Det fanger big-leaf-ligningen med 2 m-data ikke.
+// Derfor: fra 80 % luftfugtighed regnes der med fugt fra jord og plante (mm/time ved 100 %), og om natten
+// fordamper der kun fra stråene, når luften er tør.
+const CANOPY_MM = 0.04, CANOPY_RH = 80, FOG_MM = 0.03;
 
 function num(v, fb) { return (v === null || v === undefined || v === '' || Number.isNaN(+v)) ? fb : +v; }
 function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
@@ -89,13 +92,18 @@ function simulate(h, elevation, opts) {
     const before = W;
     if (P > 0) { W = Math.min(grass.cap, W + P); if (P >= 0.05) source = 'rain'; }
     let gain = Math.max(0, -Epot);                                // dug fra luften
-    if (!isDay && RH >= 90) gain += CANOPY_MM * (RH - 90) / 10;  // fugt fra jord og plante om natten
+    const lowSun = !isDay || Rs < 50;                             // aften, nat og lav sol: græsset køler af
+    if (lowSun && RH > CANOPY_RH) {                               // fugt fra jord og plante
+      const fWind = clamp(1.15 - u2 / 10, 0.6, 1), fSoil = clamp(AW / (0.5 * C), 0.3, 1);
+      gain += CANOPY_MM * (RH - CANOPY_RH) / (100 - CANOPY_RH) * fWind * fSoil;
+    }
     gain += FOG_MM * fog;                                         // tågedråber, der sætter sig på stråene
     if (gain > 0) W = Math.min(grass.cap, W + gain * wetk);
     if (Epot > 0) {
       // i næsten mættet luft og tåge tørrer tætte græstæpper langt langsommere end ligningen siger
-      const fSat = clamp((100 - RH) / 6, 0.15, 1) * (1 - 0.7 * fog);
-      W = Math.max(0, W - Epot * grass.dry * (Ts <= 0 ? 0.3 : 1) * fSat / wetk);
+      const fSat = clamp((100 - RH) / 10, 0.15, 1) * (1 - 0.7 * fog);
+      const fNight = lowSun ? clamp((CANOPY_RH - RH) / 15, 0, 1) : 1;    // om aftenen og natten kun i tør luft
+      W = Math.max(0, W - Epot * grass.dry * (Ts <= 0 ? 0.3 : 1) * fSat * fNight / wetk);
     }
     if (before <= DRY_MM && W > DRY_MM && P < 0.05) source = 'dew';
     if (nudge.has(i)) {

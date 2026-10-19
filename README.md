@@ -8,7 +8,7 @@ Hvornår er græsset tørt nok til at slå, hvor ofte skal det slås, og skal de
 
 - Vejrdata fra DMI's HARMONIE-model (2 km, de første 2½ døgn) og ECMWF via [Open-Meteo](https://open-meteo.com/) (CC BY 4.0): de seneste 30 døgn og 7 døgn frem. Uden for DMI's område bruges Open-Meteos standardmodeller.
 - Dug og fordampning beregnes med Penman–Monteith-ligningen for en våd overflade (FAO-56). Lave, mellemhøje og høje skyer vægtes forskelligt i nattens udstråling.
-- På fugtige nætter regnes også med fugt fra jord og plante (destillation og guttation), og i tåge og næsten mættet luft tørrer græsset langsomt.
+- Fra lav eftermiddagssol og hele natten regnes der fra 80 % luftfugtighed med fugt fra jord og plante (destillation og guttation), og en våd plæne tørrer kun om aftenen og natten, hvis luften er tør. I tåge og fugtig luft tørrer græsset langsomt.
 - Knapperne "Græsset er vådt" / "Græsset er tørt" lader dig rette beregningen til det, du ser. Siden regner videre derfra og tilpasser sig din have lidt ad gangen.
 - En time regnes som tør, når der er under 0,02 mm vand på stråene, ingen regn, ingen frost og dagslys.
 - Viser sidste og næste regn.
